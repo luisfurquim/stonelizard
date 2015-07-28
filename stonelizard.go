@@ -23,6 +23,8 @@ import (
    "path/filepath"
 )
 
+// http://www.hydrogen18.com/blog/stop-listening-http-server-go.html
+
 var ErrorNoRoot error = errors.New("No service root specified")
 var ErrorServiceSyntax error = errors.New("Syntax error on service definition")
 
@@ -118,10 +120,10 @@ func New(svc EndPointHandler) (*Service, error) {
    var CertId           int
    var CertIdStr      []string
 
-   Goose.Logf(1,"Elem: %#v", reflect.ValueOf(svc))
-   Goose.Logf(1,"Kind: %#v", reflect.ValueOf(svc).Kind())
+   Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc))
+   Goose.Logf(6,"Kind: %#v", reflect.ValueOf(svc).Kind())
    if reflect.ValueOf(svc).Kind() == reflect.Ptr {
-      Goose.Logf(1,"Elem: %#v", reflect.ValueOf(svc).Elem())
+      Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
       svcElem = reflect.ValueOf(svc).Elem().Interface().(EndPointHandler)
    } else {
       svcElem = svc
@@ -261,20 +263,20 @@ func New(svc EndPointHandler) (*Service, error) {
       return nil, ErrorNoRoot
    }
 
-   Goose.Logf(1,"enableCORS: [%s]",enableCORS)
+   Goose.Logf(6,"enableCORS: [%s]",enableCORS)
    if enableCORS != "" {
       resp.EnableCORS, err = strconv.ParseBool(enableCORS)
-      Goose.Logf(1,"resp.EnableCORS: %#v",resp.EnableCORS)
+      Goose.Logf(6,"resp.EnableCORS: %#v",resp.EnableCORS)
       if err != nil {
          Goose.Logf(1,"Err: %s",ErrorServiceSyntax)
          return nil, ErrorServiceSyntax
       }
    }
 
-   Goose.Logf(1,"allowGzip: [%s]",allowGzip)
+   Goose.Logf(6,"allowGzip: [%s]",allowGzip)
    if allowGzip != "" {
       resp.AllowGzip, err = strconv.ParseBool(allowGzip)
-      Goose.Logf(1,"resp.AllowGzip: %#v",resp.AllowGzip)
+      Goose.Logf(6,"resp.AllowGzip: %#v",resp.AllowGzip)
       if err != nil {
          Goose.Logf(1,"Err: %s",ErrorServiceSyntax)
          return nil, ErrorServiceSyntax
@@ -328,7 +330,7 @@ func New(svc EndPointHandler) (*Service, error) {
 
          re += "{0,1}$"
 
-         Goose.Logf(1,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+         Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
 
          if fld.Tag.Get("postdata") != "" {
             parmcount++
@@ -343,7 +345,7 @@ func New(svc EndPointHandler) (*Service, error) {
             pt = nil
          }
 
-         Goose.Logf(1,"Registering: %s",re)
+         Goose.Logf(5,"Registering: %s",re)
          consumes = fld.Tag.Get("consumes")
          if consumes == "" {
             consumes = svcConsumes
@@ -355,7 +357,7 @@ func New(svc EndPointHandler) (*Service, error) {
          }
 
 
-         Goose.Logf(1,"Registering marshalers: %s, %s",consumes,produces)
+         Goose.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
 
          resp.Svc = append(resp.Svc,UrlNode{
             Path: path,
@@ -376,26 +378,26 @@ func New(svc EndPointHandler) (*Service, error) {
 
                   ins = []reflect.Value{this}
                   for i, p = range parms {
-                     Goose.Logf(1,"parm: %d:%s",i+1,p)
+                     Goose.Logf(5,"parm: %d:%s",i+1,p)
                      parmType = met.Type.In(i+1)
                      if parmType.Name() == "string" {
                         p = "\"" + p + "\""
                      }
-                     Goose.Logf(1,"parmtype: %s",parmType.Name())
+                     Goose.Logf(5,"parmtype: %s",parmType.Name())
                      parm = reflect.New(parmType)
                      err = json.Unmarshal([]byte(p),parm.Interface())
                      if err != nil {
-                        Goose.Logf(1,"marshal: %s",err)
+                        Goose.Logf(1,"marshal error: %s",err)
                         os.Exit(1)
                      }
                      ins = append(ins,reflect.Indirect(parm))
-                     Goose.Logf(1,"ins: %d:%s",len(ins),ins)
+                     Goose.Logf(5,"ins: %d:%s",len(ins),ins)
                   }
 
 //                  Goose.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
-                  Goose.Logf(1,"posttype: %#v",posttype)
+                  Goose.Logf(6,"posttype: %#v",posttype)
                   if posttype != nil {
-                     Goose.Logf(1,"postvalue: %#v",postvalue)
+                     Goose.Logf(6,"postvalue: %#v",postvalue)
                      postvalue = reflect.New(posttype)
                      err = Unmarshal.Decode(postvalue.Interface())
                      if err != nil {
@@ -405,9 +407,9 @@ func New(svc EndPointHandler) (*Service, error) {
                         Goose.Logf(1,"Internal server error: %s - postvalue: %s",err,postvalue.Interface())
                         return httpResp
                      }
-                     Goose.Logf(1,"postvalue: %#v",postvalue)
+                     Goose.Logf(6,"postvalue: %#v",postvalue)
                      ins = append(ins,reflect.Indirect(postvalue))
-                     Goose.Logf(1,"ins: %d:%s",len(ins),ins)
+                     Goose.Logf(5,"ins: %d:%s",len(ins),ins)
                   }
 
                   return met.Func.Call(ins)[0].Interface().(Response)
@@ -434,7 +436,7 @@ func (svc *Service) ListenAndServeTLS() error {
       aType = tls.RequestClientCert
    }
 
-   Goose.Logf(2,"auth: %#v",aType)
+   Goose.Logf(6,"auth: %#v",aType)
 
    srv := &http.Server{
       Addr: svc.ListenAddress,
@@ -523,10 +525,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var gzw                   *gzip.Writer
 
 
-   Goose.Logf(2,"Peer certificates")
+   Goose.Logf(5,"Peer certificates")
    found = false
    for _, cert = range r.TLS.PeerCertificates {
-      Goose.Logf(2,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      Goose.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       CertIdStr = strings.Split(cert.Subject.CommonName,":")
       if len(CertIdStr) != 2 {
          continue
@@ -577,7 +579,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       Goose.Logf(5,"trying %s with endpoint: %s",r.URL.Path,endpoint.Path)
       match = endpoint.Matcher.FindAllStringSubmatch(r.Method+":"+r.URL.Path,-1)
       if len(match) > 0 {
-         Goose.Logf(2,"Found endpoint %s for: %s",endpoint.Path,r.URL.Path)
+         Goose.Logf(5,"Found endpoint %s for: %s",endpoint.Path,r.URL.Path)
          break
       }
    }
@@ -589,7 +591,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   Goose.Logf(1,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
+   Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
 
    if endpoint.consumes == "application/json" {
       umrsh = json.NewDecoder(r.Body)
@@ -597,22 +599,22 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       umrsh = xml.NewDecoder(r.Body)
    }
 
-   Goose.Logf(1,"umrsh=%#v",umrsh)
+   Goose.Logf(6,"umrsh=%#v",umrsh)
 
    resp = endpoint.Handle(match[0][1:],umrsh)
 
    outWriter = w
 
    if encRequest, ok = r.Header["Accept-Encoding"] ; ok {
-      Goose.Logf(1,"Accept-Encoding: %#v",encRequest)
+      Goose.Logf(6,"Accept-Encoding: %#v",encRequest)
       if svc.AllowGzip == true {
-         Goose.Logf(1,"svc.AllowGzip == true")
+         Goose.Logf(5,"svc.AllowGzip == true")
 gzipcheck:
          for _, enc = range encRequest {
             for _, e = range strings.Split(enc,", ") {
-               Goose.Logf(1,"Encoding: %s",e)
+               Goose.Logf(5,"Encoding: %s",e)
                if e == "gzip" {
-                  Goose.Logf(1,"Using gzip")
+                  Goose.Logf(5,"Using gzip")
                   gzw = gzip.NewWriter(w)
                   outWriter = gzHttpResponseWriter{
                      Writer: gzw,
