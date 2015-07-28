@@ -7,7 +7,7 @@ import (
    "net"
    "sync"
    "time"
-//   "bytes"
+   "bytes"
    "errors"
    "regexp"
    "strconv"
@@ -509,10 +509,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var match              [][]string
    var endpoint               UrlNode
    var resp                   Response
-//   var cert, UserCert        *x509.Certificate
-//   var CertIdStr            []string
-//   var CertId                 int
-//   var found, ok              bool
+   var cert, UserCert        *x509.Certificate
+   var CertIdStr            []string
+   var CertId                 int
+   var found                  bool
    var  ok              bool
 //   var ok              bool
 //   var body                 []byte
