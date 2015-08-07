@@ -89,36 +89,125 @@ func (svc Service) Close() {
    svc.CRLListener.Close()
 }
 
+func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
+   var item, subItem *SwaggerParameterT
+   var field reflect.StructField
+   var err error
+   var i int
+
+   if parm.Kind() == reflect.Bool {
+      return &SwaggerParameterT{Type:"boolean"}, nil
+   }
+
+   if (parm.Kind()>=reflect.Int) && (parm.Kind()<=reflect.Int32) {
+      return &SwaggerParameterT{Type:"integer", Format: "int32"}, nil
+   }
+
+   if parm.Kind()==reflect.Int64 {
+      return &SwaggerParameterT{Type:"integer", Format: "int64"}, nil
+   }
+
+   if (parm.Kind()>=reflect.Uint) && (parm.Kind()<=reflect.Uint64) {
+      return &SwaggerParameterT{Type:"integer"}, nil
+   }
+
+   if parm.Kind()==reflect.Float32 {
+      return &SwaggerParameterT{Type:"number", Format: "float"}, nil
+   }
+
+   if parm.Kind()==reflect.Float64 {
+      return &SwaggerParameterT{Type:"number", Format: "double"}, nil
+   }
+
+   if parm.Kind()==reflect.String {
+      return &SwaggerParameterT{Type:"string"}, nil
+   }
+
+   if parm.Kind()==reflect.Ptr {
+      return GetSwaggerType(parm.Elem())
+   }
+
+   if (parm.Kind()==reflect.Array) || (parm.Kind()==reflect.Slice) {
+      item, err = GetSwaggerType(parm.Elem())
+      if err != nil {
+         return nil, err
+      }
+      return &SwaggerParameterT{
+         Type:"array",
+         Items: &SwaggerItemT{
+            Type:             item.Type,
+            Format:           item.Format,
+            Items:            item.Items,
+            CollectionFormat: item.CollectionFormat,
+         },
+         CollectionFormat: "csv",
+      }, nil // TODO: allow more collection formats
+   }
+
+   if parm.Kind()==reflect.Struct {
+      item = &SwaggerParameterT{
+         Type:"object",
+         Schema: SwaggerSchemaT{
+            Required: []string{},
+            Properties: map[string]SwaggerSchemaT{},
+         },
+      }
+      for i=0; i<parm.NumField(); i++ {
+         field = parm.Field(i)
+         subItem, err = GetSwaggerType(field.Type)
+         if err != nil {
+            return nil, err
+         }
+         item.Schema.Required = append(item.Schema.Required,field.Name)
+         item.Schema.Properties[field.Name] = SwaggerSchemaT{
+            Type:             subItem.Type,
+            Format:           subItem.Format,
+            Items:            subItem.Items,
+         }
+      }
+      return item, nil
+   }
+
+   return nil, errors.New(fmt.Sprintf("invalid parameter %s type",parm.Name()))
+}
+
 
 func New(svc EndPointHandler) (*Service, error) {
-   var resp            *Service
-   var ls               net.Listener
-   var svcElem          EndPointHandler
-   var consumes         string
-   var svcConsumes      string
-   var produces         string
-   var svcProduces      string
-   var allowGzip        string
-   var enableCORS       string
-   var cfg              io.Reader
-   var svcRoot          string
-   var i, j             int
-   var typ              reflect.Type
-   var pt               reflect.Type
-   var fld              reflect.StructField
-   var method           reflect.Method
-   var parmcount        int
-   var httpmethod, path string
-   var methodName       string
-   var tk               string
-   var ok               bool
-   var re               string
-   var c                rune
-   var err              error
-   var ClientCertPem  []byte
-   var ClientCert      *x509.Certificate
-   var CertId           int
-   var CertIdStr      []string
+   var resp               *Service
+   var ls                  net.Listener
+   var svcElem             EndPointHandler
+   var consumes            string
+   var svcConsumes         string
+   var produces            string
+   var svcProduces         string
+   var allowGzip           string
+   var enableCORS          string
+   var cfg                 io.Reader
+   var svcRoot             string
+   var i, j                int
+   var typ                 reflect.Type
+   var pt                  reflect.Type
+   var fld                 reflect.StructField
+   var method              reflect.Method
+   var parmcount           int
+   var httpmethod, path    string
+   var methodName          string
+   var tk                  string
+   var ok                  bool
+   var re                  string
+   var c                   rune
+   var err                 error
+   var ClientCertPem     []byte
+   var ClientCert         *x509.Certificate
+   var CertId              int
+   var CertIdStr         []string
+   var stmp                string
+   var SwaggerParameter   *SwaggerParameterT
+   var swaggerParameters []SwaggerParameterT
+   var swaggerInfo         SwaggerInfoT
+   var swaggerLicense      SwaggerLicenseT
+   var swaggerContact      SwaggerContactT
+   var globalDataCount     int
 
    Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc))
    Goose.Logf(6,"Kind: %#v", reflect.ValueOf(svc).Kind())
@@ -172,7 +261,11 @@ func New(svc EndPointHandler) (*Service, error) {
    }
 
 
-   resp.PageNotFound, _ = ioutil.ReadFile(resp.PageNotFoundPath)
+   resp.PageNotFound, err = ioutil.ReadFile(resp.PageNotFoundPath)
+   if err != nil {
+      Goose.Logf(1,"Failed reading %s file: %s", resp.PageNotFoundPath, err)
+      return nil, err
+   }
 
    err = resp.readCert(&resp.Auth.CACertPem,     &resp.Auth.CACert,     resp.PemPath + "/rootCA.crt")
    if err != nil {
@@ -240,19 +333,49 @@ func New(svc EndPointHandler) (*Service, error) {
      return nil
    })
 
-
-//   typ = reflect.ValueOf(svcElem).Elem().Type()
    typ = reflect.ValueOf(svcElem).Type()
-   for i=0; i<typ.NumField(); i++ {
-      svcRoot = typ.Field(i).Tag.Get("root")
-      if svcRoot != "" {
-         svcConsumes = typ.Field(i).Tag.Get("consumes")
-         svcProduces = typ.Field(i).Tag.Get("produces")
-         allowGzip   = typ.Field(i).Tag.Get("allowGzip")
-         enableCORS  = typ.Field(i).Tag.Get("EnableCORS")
-         break
+   for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
+      if svcRoot == "" {
+         svcRoot = typ.Field(i).Tag.Get("root")
+         if svcRoot != "" {
+            svcConsumes = typ.Field(i).Tag.Get("consumes")
+            svcProduces = typ.Field(i).Tag.Get("produces")
+            allowGzip   = typ.Field(i).Tag.Get("allowGzip")
+            enableCORS  = typ.Field(i).Tag.Get("EnableCORS")
+            globalDataCount++
+         }
+      }
+      if swaggerInfo.Title == "" {
+         stmp = typ.Field(i).Tag.Get("title")
+         if stmp != "" {
+            swaggerInfo.Title          = stmp
+            swaggerInfo.Description    = typ.Field(i).Tag.Get("description")
+            swaggerInfo.TermsOfService = typ.Field(i).Tag.Get("tos")
+            swaggerInfo.Version        = typ.Field(i).Tag.Get("version")
+            globalDataCount++
+         }
+      }
+      if swaggerContact.Name == "" {
+         stmp = typ.Field(i).Tag.Get("contact")
+         if stmp != "" {
+            swaggerContact.Name  = stmp
+            swaggerContact.Url   = typ.Field(i).Tag.Get("url")
+            swaggerContact.Email = typ.Field(i).Tag.Get("email")
+            globalDataCount++
+         }
+      }
+      if swaggerLicense.Name == "" {
+         stmp = typ.Field(i).Tag.Get("license")
+         if stmp != "" {
+            swaggerLicense.Name  = stmp
+            swaggerLicense.Url   = typ.Field(i).Tag.Get("url")
+            globalDataCount++
+         }
       }
    }
+
+   swaggerInfo.Contact = swaggerContact
+   swaggerInfo.License = swaggerLicense
 
    svcRoot     = strings.Trim(strings.Trim(svcRoot," "),"/") + "/"
    svcConsumes = strings.Trim(svcConsumes," ")
@@ -261,6 +384,24 @@ func New(svc EndPointHandler) (*Service, error) {
    if (svcRoot=="") || (svcConsumes=="") || (svcProduces=="") {
       Goose.Logf(1,"Err: %s",ErrorNoRoot)
       return nil, ErrorNoRoot
+   }
+
+
+   hostport := strings.Split(resp.ListenAddress,":")
+   if hostport[0] == "" {
+      hostport[0] = resp.Auth.ServerCert.DNSNames[0]
+   }
+
+   resp.Swagger = &SwaggerT{
+      Version:     "2.0",
+      Info:        swaggerInfo,
+      Host:        strings.Join(hostport,":"),
+      BasePath:    "/" + svcRoot[:len(svcRoot)-1],
+      Schemes:     []string{"https"},
+      Consumes:    []string{svcConsumes},
+      Produces:    []string{svcProduces},
+      Paths:       map[string]SwaggerPathT{},
+      Definitions: map[string]SwaggerSchemaT{},
    }
 
    Goose.Logf(6,"enableCORS: [%s]",enableCORS)
@@ -305,6 +446,14 @@ func New(svc EndPointHandler) (*Service, error) {
          }
          path   = fld.Tag.Get("path")
 
+         if _, ok := resp.Swagger.Paths[path]; !ok {
+            resp.Swagger.Paths[path] = SwaggerPathT{}
+//         } else if _, ok := resp.Swagger.Paths[path][httpmethod]; !ok {
+//            resp.Swagger.Paths[path][httpmethod] = SwaggerOperationT{}
+         }
+
+         swaggerParameters = []SwaggerParameterT{}
+
          re = "^" + strings.ToUpper(httpmethod) + ":/" + svcRoot
 
          parmcount = 0
@@ -313,6 +462,25 @@ func New(svc EndPointHandler) (*Service, error) {
                if (tk[0]=='{') && (tk[len(tk)-1]=='}') {
                   re += "([^/]+)/"
                   parmcount++
+                  SwaggerParameter, err = GetSwaggerType(method.Type.In(parmcount))
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
+                     return nil, errors.New(fmt.Sprintf("invalid parameter %s type",tk[1:len(tk)-1]))
+                  }
+
+                  swaggerParameters = append(
+                     swaggerParameters,
+                     SwaggerParameterT{
+                        Name: tk[1:len(tk)-1],
+                        In:   "path",
+                        Required: true,
+                        Type: SwaggerParameter.Type,
+                        Format: SwaggerParameter.Format,
+
+                     })
                } else if (tk[0]!='{') && (tk[len(tk)-1]!='}') {
                   for _, c = range tk {
                      re += fmt.Sprintf("\\x{%x}",c)
@@ -338,6 +506,16 @@ func New(svc EndPointHandler) (*Service, error) {
                return nil, errors.New("Wrong parameter count (with post) at method " + methodName)
             }
             pt = method.Type.In(parmcount)
+            SwaggerParameter, err = GetSwaggerType(pt)
+            if err != nil {
+               return nil, err
+            }
+
+            SwaggerParameter.Name     = tk[1:len(tk)-1]
+            SwaggerParameter.In       = "body"
+            SwaggerParameter.Required = true
+
+            swaggerParameters = append(swaggerParameters,*SwaggerParameter)
          } else {
             if (parmcount+1) != method.Type.NumIn() {
                return nil, errors.New("Wrong parameter count at method " + methodName)
@@ -355,6 +533,16 @@ func New(svc EndPointHandler) (*Service, error) {
          if produces == "" {
             produces = svcProduces
          }
+
+         resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = SwaggerOperationT{
+            Schemes: []string{"https"},
+            OperationId: methodName,
+            Parameters: swaggerParameters,
+            Responses: map[string]SwaggerResponseT{},
+            Consumes: []string{consumes},
+            Produces: []string{produces},
+         }
+
 
 
          Goose.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
@@ -573,6 +761,19 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //Access-Control-Allow-Methods: POST, GET, OPTIONS
 //Access-Control-Allow-Headers: X-PINGOTHER
 //Access-Control-Allow-Origin: *
+   }
+
+   Goose.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
+   if r.URL.Path=="/swagger.json" {
+      mrsh = json.NewEncoder(w)
+      hd.Add("Content-Type","application/json")
+      w.WriteHeader(http.StatusOK)
+      Goose.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
+      err = mrsh.Encode(svc.Swagger)
+      if err!=nil {
+         Goose.Logf(1,"Internal server error writing response body for swagger.json: %s",err)
+      }
+      return
    }
 
    for _, endpoint = range svc.Svc {
