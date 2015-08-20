@@ -56,7 +56,7 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
       //Check for the channel being closed
       select {
          case <-sl.stop:
-            Goose.Logf(6,"Received stop request")
+            Goose.Logf(2,"Received stop request")
             return nil, ErrorStopped
          default:
             Goose.Logf(6,"channel still open")
@@ -75,7 +75,7 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
          }
       }
 
-      Goose.Logf(6,"done listening",err)
+      Goose.Logf(2,"done listening, err=%s",err)
       return newConn, err
    }
 }
@@ -173,49 +173,56 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
 
 func New(svc EndPointHandler) (*Service, error) {
-   var resp               *Service
-   var ls                  net.Listener
-   var svcElem             EndPointHandler
-   var consumes            string
-   var svcConsumes         string
-   var produces            string
-   var svcProduces         string
-   var allowGzip           string
-   var enableCORS          string
-   var cfg                 io.Reader
-   var svcRoot             string
-   var i, j                int
-   var typ                 reflect.Type
-   var pt                  reflect.Type
-   var fld                 reflect.StructField
-   var method              reflect.Method
-   var parmcount           int
-   var httpmethod, path    string
-   var methodName          string
-   var tk                  string
-   var ok                  bool
-   var re                  string
-   var c                   rune
-   var err                 error
-   var ClientCertPem     []byte
-   var ClientCert         *x509.Certificate
-   var CertId              int
-   var CertIdStr         []string
-   var stmp                string
-   var SwaggerParameter   *SwaggerParameterT
-   var swaggerParameters []SwaggerParameterT
-   var swaggerInfo         SwaggerInfoT
-   var swaggerLicense      SwaggerLicenseT
-   var swaggerContact      SwaggerContactT
-   var globalDataCount     int
+   var resp                *Service
+   var ls                   net.Listener
+   var svcElem              EndPointHandler
+   var svcRecv              reflect.Value
+   var consumes             string
+   var svcConsumes          string
+   var produces             string
+   var svcProduces          string
+   var allowGzip            string
+   var enableCORS           string
+   var cfg                  io.Reader
+   var svcRoot              string
+   var i, j                 int
+   var typ                  reflect.Type
+   var typPtr               reflect.Type
+   var pt                   reflect.Type
+   var fld                  reflect.StructField
+   var method               reflect.Method
+   var parmcount            int
+   var httpmethod, path     string
+   var methodName           string
+   var tk                   string
+   var ok                   bool
+   var re                   string
+   var c                    rune
+   var err                  error
+   var ClientCertPem      []byte
+   var ClientCert          *x509.Certificate
+   var CertId               int
+   var CertIdStr          []string
+   var stmp                 string
+   var SwaggerParameter    *SwaggerParameterT
+   var swaggerParameters  []SwaggerParameterT
+   var swaggerInfo          SwaggerInfoT
+   var swaggerLicense       SwaggerLicenseT
+   var swaggerContact       SwaggerContactT
+   var globalDataCount      int
+   var responseOk           string
+   var responses map[string]SwaggerResponseT
+   var fldType              reflect.Type
 
    Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc))
    Goose.Logf(6,"Kind: %#v", reflect.ValueOf(svc).Kind())
    if reflect.ValueOf(svc).Kind() == reflect.Ptr {
       Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
       svcElem = reflect.ValueOf(svc).Elem().Interface().(EndPointHandler)
+      Goose.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
    } else {
       svcElem = svc
+      Goose.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
    }
 
    resp = &Service{
@@ -334,6 +341,13 @@ func New(svc EndPointHandler) (*Service, error) {
    })
 
    typ = reflect.ValueOf(svcElem).Type()
+   if typ.Kind()==reflect.Ptr {
+      typPtr     = typ
+      typ        = typ.Elem()
+   } else {
+      typPtr = reflect.PtrTo(typ)
+   }
+
    for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
       if svcRoot == "" {
          svcRoot = typ.Field(i).Tag.Get("root")
@@ -429,8 +443,9 @@ func New(svc EndPointHandler) (*Service, error) {
       httpmethod = fld.Tag.Get("method")
       if httpmethod != "" {
          methodName = strings.ToUpper(fld.Name[:1]) + fld.Name[1:]
+         svcRecv = reflect.ValueOf(svcElem)
          if method, ok = typ.MethodByName(methodName); !ok {
-            if method, ok = reflect.ValueOf(svcElem).Type().MethodByName(methodName); !ok {
+            if method, ok = typPtr.MethodByName(methodName); !ok {
                Goose.Logf(5,"|methods|=%d",typ.NumMethod())
                Goose.Logf(5,"type=%s.%s",typ.PkgPath(),typ.Name())
                for j=0; j<typ.NumMethod(); j++ {
@@ -441,6 +456,8 @@ func New(svc EndPointHandler) (*Service, error) {
                Goose.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
                return nil, errors.New(fmt.Sprintf("Method not found: %s",methodName))
             } else {
+               Goose.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
+               svcRecv = reflect.ValueOf(svc)
                Goose.Logf(5,"Pointer method found: %s",methodName)
             }
          }
@@ -534,11 +551,45 @@ func New(svc EndPointHandler) (*Service, error) {
             produces = svcProduces
          }
 
+         responses = map[string]SwaggerResponseT{}
+
+         responseOk = fld.Tag.Get("ok")
+         if responseOk != "" {
+            fldType = fld.Type
+            if fldType.Kind() == reflect.Ptr {
+               fldType = fldType.Elem()
+            }
+            SwaggerParameter, err = GetSwaggerType(fldType)
+            if err != nil {
+               return nil, err
+            }
+
+            responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
+               Description: responseOk,
+               Schema:      SwaggerParameter.Schema,
+            }
+         } else {
+            if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
+               responseList := responseFunc.Func.Call([]reflect.Value{})[0].Interface().(map[string]ResponseT)
+               for responseStatus, responseSchema := range responseList {
+                  SwaggerParameter, err = GetSwaggerType(reflect.TypeOf(responseSchema.TypeReturned))
+                  if err != nil {
+                     return nil, err
+                  }
+                  responses[responseStatus] = SwaggerResponseT{
+                     Description: responseSchema.Description,
+                     Schema:      SwaggerParameter.Schema,
+                  }
+               }
+            }
+         }
+
+
          resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = SwaggerOperationT{
             Schemes: []string{"https"},
             OperationId: methodName,
             Parameters: swaggerParameters,
-            Responses: map[string]SwaggerResponseT{},
+            Responses: responses,
             Consumes: []string{consumes},
             Produces: []string{produces},
          }
@@ -602,7 +653,7 @@ func New(svc EndPointHandler) (*Service, error) {
 
                   return met.Func.Call(ins)[0].Interface().(Response)
                }
-            }(reflect.ValueOf(svcElem),method,pt),
+            }(svcRecv,method,pt),
          })
       }
    }
@@ -660,18 +711,19 @@ func (svc *Service) ListenAndServeTLS() error {
       defer wg.Done()
       err = srvcrl.Serve(svc.CRLListener)
 
-      err = http.ListenAndServe(svc.CRLListenAddress,svc.Auth)
-      if err != nil {
-         Goose.Fatalf(1,"Error serving CRL: %s",err)
-      }
-
-
+//      Goose.Logf(5,"CRL Listen is serving")
+//      err = http.ListenAndServe(svc.CRLListenAddress,svc.Auth)
+//      if err != nil {
+//         Goose.Fatalf(1,"Error serving CRL: %s",err)
+//      }
+      Goose.Logf(5,"CRL Listen ended listening")
    }()
 
 
    go func() {
       defer wg.Done()
       err = srv.Serve(crypls)
+      Goose.Logf(5,"Main Listen ended listening")
    }()
 
    wg.Wait()

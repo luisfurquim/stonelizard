@@ -81,6 +81,11 @@ type Service struct {
    Swagger           *SwaggerT
 }
 
+type ResponseT struct {
+   Description string
+   TypeReturned interface{}
+}
+
 type SwaggerContactT struct {
    // The identifying name of the contact person/organization.
    Name  string              `json:"name"`
@@ -729,3 +734,4 @@ type SwaggerT struct {
 
 var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
+var ErrorDescriptionSyntax = errors.New("Syntax error on reponse description")
