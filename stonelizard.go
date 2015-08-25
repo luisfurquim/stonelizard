@@ -357,6 +357,7 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
    }
 }
 
+
 func New(svcs ...EndPointHandler) (*Service, error) {
    var resp                *Service
    var svc                  EndPointHandler
