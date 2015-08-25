@@ -43,7 +43,7 @@ func NewListener(l net.Listener) (*StoppableListener, error) {
    return retval, nil
 }
 
-func (sl *StoppableListener) Accept() (net.Conn, error) {
+func (sl *StoppableListener) Accept() (net.Conn, error) {//wrapper em cima do accept do sistema
 
    for {
       Goose.Logf(6,"Start accept loop")
