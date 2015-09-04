@@ -603,7 +603,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   return nil, err
                }
 
-               SwaggerParameter.Name     = tk[1:len(tk)-1]
+               SwaggerParameter.Name     = fld.Tag.Get("postdata")
                SwaggerParameter.In       = "body"
                SwaggerParameter.Required = true
 
