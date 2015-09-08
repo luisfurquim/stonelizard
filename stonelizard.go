@@ -102,32 +102,35 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var err error
    var i int
 
+   Goose.Logf(1,"Tipo do parametro: %d: %#v",parm.Kind(),parm)
+
    if parm.Kind() == reflect.Bool {
-      return &SwaggerParameterT{Type:"boolean"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"boolean"}}, nil
    }
 
    if (parm.Kind()>=reflect.Int) && (parm.Kind()<=reflect.Int32) {
-      return &SwaggerParameterT{Type:"integer", Format: "int32"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer", Format: "int32"}}, nil
    }
 
    if parm.Kind()==reflect.Int64 {
-      return &SwaggerParameterT{Type:"integer", Format: "int64"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer", Format: "int64"}}, nil
    }
 
    if (parm.Kind()>=reflect.Uint) && (parm.Kind()<=reflect.Uint64) {
-      return &SwaggerParameterT{Type:"integer"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer"}}, nil
    }
 
    if parm.Kind()==reflect.Float32 {
-      return &SwaggerParameterT{Type:"number", Format: "float"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"number", Format: "float"}}, nil
    }
 
    if parm.Kind()==reflect.Float64 {
-      return &SwaggerParameterT{Type:"number", Format: "double"}, nil
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"number", Format: "double"}}, nil
    }
 
    if parm.Kind()==reflect.String {
-      return &SwaggerParameterT{Type:"string"}, nil
+      Goose.Logf(1,"Got string")
+      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"string"}}, nil
    }
 
    if parm.Kind()==reflect.Ptr {
@@ -569,9 +572,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                            Name: tk[1:len(tk)-1],
                            In:   "path",
                            Required: true,
-                           Type: SwaggerParameter.Type,
+                           Schema: SwaggerSchemaT{
+                              Type: SwaggerParameter.Schema.Type,
+                           },
                            Format: SwaggerParameter.Format,
-
                         })
                   } else if (tk[0]!='{') && (tk[len(tk)-1]!='}') {
                      for _, c = range tk {

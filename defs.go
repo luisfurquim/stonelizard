@@ -248,7 +248,7 @@ type SwaggerXmlT struct {
 }
 
 type SwaggerSchemaT struct {
-   Title string `json:"title"`
+   Title string `json:"title,omitempty"`
 
    // GFM syntax can be used for rich text representation
    Description string `json:"description,omitempty"`
@@ -319,7 +319,7 @@ type SwaggerSchemaT struct {
    // Determines whether this parameter is mandatory.
    // If the parameter is in "path", this property is required and its value MUST be true.
    // Otherwise, the property MAY be included and its default value is false.
-   Required          []string  `json:"required"`
+   Required          []string  `json:"required,omitempty"`
 
    // This keyword's value MUST be an array. This array MUST have at least one element.
    // Elements of the array MUST be objects. Each object MUST be a valid Swagger JSON Schema.
@@ -349,10 +349,10 @@ type SwaggerSchemaT struct {
    // This MAY be used only on properties schemas.
    // It has no effect on root schemas.
    // Adds Additional metadata to describe the XML representation format of this property.
-   Xml   SwaggerXmlT `json:"xml,omitempty"`
+   Xml   *SwaggerXmlT `json:"xml,omitempty"`
 
    // External Documentation Object Additional external documentation for this schema.
-   ExternalDocs SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+   ExternalDocs *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
 
    // A free-form property to include a an example of an instance for this schema.
    Example  interface{} `json:"example,omitempty"`
@@ -458,7 +458,7 @@ type SwaggerParameterT struct {
    // Since the parameter is not located at the request body, it is limited to simple types (that is, not an object).
    // The value MUST be one of "string", "number", "integer", "boolean", "array" or "file" (Files and models are not allowed in arrays).
    // If type is "file", the consumes MUST be either "multipart/form-data" or " application/x-www-form-urlencoded" and the parameter MUST be in "formData".
-   Type              string         `json:"type"`
+   Type              string         `json:"type,omitempty"`
 
    // Required if type is "array". Describes the type of items in the array.
    Items            *SwaggerItemT   `json:"items,omitempty"`
