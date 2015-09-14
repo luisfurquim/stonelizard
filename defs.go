@@ -132,7 +132,7 @@ type SwaggerInfoT struct {
 type SwaggerOperationT struct {
    // A list of tags for API documentation control.
    // Tags can be used for logical grouping of operations by resources or any other qualifier.
-   Tags  []string `json:"tags"`
+   Tags  []string `json:"tags,omitempty"`
 
    // A short summary of what the operation does.
    // For maximum readability in the swagger-ui, this field SHOULD be less than 120 characters.
@@ -142,7 +142,7 @@ type SwaggerOperationT struct {
    Description string `json:"description,omitempty"`
 
    // Additional external documentation for this operation.
-   ExternalDocs   SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
 
    // Unique string used to identify the operation.
    // The id MUST be unique among all operations described in the API.
@@ -645,7 +645,7 @@ type SwaggerTagT struct {
    Description string `json:"description,omitempty"`
 
    // Additional external documentation for this tag.
-   ExternalDocs   SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
 }
 
 type SwaggerExternalDocsT struct {

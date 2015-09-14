@@ -755,6 +755,15 @@ func (svc *Service) ListenAndServeTLS() error {
    var aType  tls.ClientAuthType
    var wg     sync.WaitGroup
    var crypls net.Listener
+   var hn                   string
+
+   if svc.ListenAddress[0] == ':' {
+      hn, err = os.Hostname()
+      if err!=nil {
+         Goose.Logf(1,"Error checking hostname: %s", err)
+         return err
+      }
+   }
 
    if svc.AuthRequired {
       aType = tls.RequireAndVerifyClientCert
@@ -766,7 +775,7 @@ func (svc *Service) ListenAndServeTLS() error {
    Goose.Logf(6,"auth: %#v",aType)
 
    srv := &http.Server{
-      Addr: svc.ListenAddress,
+      Addr: hn + svc.ListenAddress,
       Handler: svc,
 
       TLSConfig: &tls.Config{
@@ -788,7 +797,7 @@ func (svc *Service) ListenAndServeTLS() error {
    crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
 
    srvcrl := &http.Server{
-      Addr: svc.CRLListenAddress,
+      Addr: hn + svc.CRLListenAddress,
       Handler: svc.Auth,
    }
 
