@@ -63,6 +63,7 @@ type UrlNode struct {
    consumes  string
    allowGzip bool
    Matcher  *regexp.Regexp
+   Headers []string
    Handle    func ([]string, Unmarshaler) Response
 }
 
@@ -740,3 +741,6 @@ var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
 var ErrorInvalidNilParam = errors.New("Syntax error nil parameter not allowed in this context")
+var ErrorWrongParameterCount = errors.New("Wrong parameter count")
+var ErrorInvalidParameterType = errors.New("Invalid parameter type")
+var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")

@@ -415,6 +415,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var fldType              reflect.Type
    var doc                  string
    var description         *string
+   var hdrFlds              string
+   var hdrFld               string
+   var headers            []string
 
    for _, svc = range svcs {
       Goose.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -585,7 +588,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      }
 
                      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                        return nil, errors.New(fmt.Sprintf("invalid parameter %s type",tk[1:len(tk)-1]))
+                        Goose.Logf(1,"%s: %s",tk[1:len(tk)-1])
+                        return nil, ErrorInvalidParameterType
                      }
 
                      doc = fld.Tag.Get(tk[1:len(tk)-1])
@@ -624,6 +628,46 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
 
             re += "{0,1}$"
+
+            hdrFlds = fld.Tag.Get("header")
+            headers = []string{}
+            if hdrFlds != "" {
+               for _, hdrFld = range strings.Split(hdrFlds,",") {
+                  parmcount++
+                  if (parmcount+1) > method.Type.NumIn() {
+                     Goose.Logf(1,"%s (with header) at method ", ErrorWrongParameterCount, methodName)
+                     return nil, ErrorWrongParameterCount
+                  }
+                  pt = method.Type.In(parmcount)
+                  SwaggerParameter, err = GetSwaggerType(pt)
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if SwaggerParameter == nil {
+                     return nil, ErrorInvalidNilParam
+                  }
+
+                  if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
+                     Goose.Logf(1,"%s: %s",hdrFld)
+                     return nil, ErrorInvalidParameterType
+                  }
+
+
+                  doc = fld.Tag.Get(hdrFld)
+                  if doc != "" {
+                     SwaggerParameter.Schema.Description    = new(string)
+                     (*SwaggerParameter.Schema.Description) = doc
+                  }
+
+                  SwaggerParameter.Name     = hdrFld
+                  SwaggerParameter.In       = "header"
+                  SwaggerParameter.Required = true
+
+                  swaggerParameters = append(swaggerParameters,*SwaggerParameter)
+                  headers           = append(headers,hdrFld)
+               }
+            }
 
             Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
 
@@ -740,6 +784,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Matcher: regexp.MustCompile(re),
                consumes: consumes,
                produces: produces,
+               Headers: headers,
                Handle: buildHandle(svcRecv,method,pt),
             })
          }
@@ -860,6 +905,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var encRequest           []string
    var enc, e                 string
    var gzw                   *gzip.Writer
+   var header                 string
 
 
    Goose.Logf(5,"Peer certificates")
@@ -939,6 +985,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       w.WriteHeader(http.StatusBadRequest)
       w.Write([]byte("Invalid service handler " + r.URL.Path))
       return
+   }
+
+   for _, header = range endpoint.Headers {
+      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
+         Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         return
+      }
+      match[0] = append(match[0],r.Header[header][0])
    }
 
    Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
