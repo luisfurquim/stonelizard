@@ -103,6 +103,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var description   *string
    var err            error
    var i              int
+   var fieldType      string
 
    Goose.Logf(6,"Tipo do parametro: %d: %#v",parm.Kind(),parm)
 
@@ -166,11 +167,13 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          Schema: SwaggerSchemaT{
             Required: []string{},
             Properties: map[string]SwaggerSchemaT{},
-            Description: description,
+//            Description: description,
          },
       }
+      Goose.Logf(6,"Got struct: %#v",item)
       for i=0; i<parm.NumField(); i++ {
          field = parm.Field(i)
+         Goose.Logf(6,"Struct field: %s",field.Name)
          doc   = field.Tag.Get("doc")
          if doc != "" {
             description    = new(string)
@@ -180,17 +183,26 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          }
 
          subItem, err = GetSwaggerType(field.Type)
-         if (item==nil) || (err != nil) {
+         if (subItem==nil) || (err != nil) {
             return nil, err
          }
          item.Schema.Required = append(item.Schema.Required,field.Name)
+         if subItem.Type != "" {
+            fieldType = subItem.Type
+         } else {
+            fieldType = subItem.Schema.Type
+         }
+
          item.Schema.Properties[field.Name] = SwaggerSchemaT{
-            Type:             subItem.Type,
+            Type:             fieldType,
             Format:           subItem.Format,
             Items:            subItem.Items,
             Description:      description,
+            Required:         subItem.Schema.Required,
+            Properties:       subItem.Schema.Properties,
          }
       }
+      Goose.Logf(6,"Got final struct: %#v",item)
       return item, nil
    }
 
@@ -629,6 +641,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             re += "{0,1}$"
 
+            Goose.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
+
             hdrFlds = fld.Tag.Get("header")
             headers = []string{}
             if hdrFlds != "" {
@@ -723,6 +737,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                if fldType.Kind() == reflect.Ptr {
                   fldType = fldType.Elem()
                }
+
                SwaggerParameter, err = GetSwaggerType(fldType)
                if err != nil {
                   return nil, err
@@ -735,15 +750,23 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                } else {
 
                   doc = fld.Tag.Get(fld.Name)
+
                   if doc != "" {
                      SwaggerParameter.Schema.Description    = new(string)
                      (*SwaggerParameter.Schema.Description) = doc
                   }
 
+                  if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+                     SwaggerParameter.Schema.Type = SwaggerParameter.Type
+                  }
+
                   responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
                      Description: responseOk,
-                     Schema:      &SwaggerParameter.Schema,
+                     Schema:      &SwaggerSchemaT{},
                   }
+                  (*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = SwaggerParameter.Schema
+                  //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+                  Goose.Logf(6,"====== %#v",*responses[fmt.Sprintf("%d",http.StatusOK)].Schema)
                }
             } else {
                if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
@@ -906,6 +929,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var enc, e                 string
    var gzw                   *gzip.Writer
    var header                 string
+   var buf                  []byte
 
 
    Goose.Logf(5,"Peer certificates")
@@ -960,11 +984,24 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    Goose.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
-      mrsh = json.NewEncoder(w)
+      defer func() {
+         Goose.Logf(5,"Testing the need to recover...")
+         if r := recover(); r != nil {
+            Goose.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
+         }
+         Goose.Logf(5,"Tested the need to recover!!!")
+      }()
       hd.Add("Content-Type","application/json")
-      w.WriteHeader(http.StatusOK)
+//      w.WriteHeader(http.StatusOK)
       Goose.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
-      err = mrsh.Encode(svc.Swagger)
+//      mrsh = json.NewEncoder(w)
+//      err = mrsh.Encode(svc.Swagger)
+      buf, err = json.Marshal(svc.Swagger)
+      if err!=nil {
+         Goose.Logf(1,"Internal server error marshaling swagger.json: %s",err)
+      }
+      hd.Add("Content-Length", fmt.Sprintf("%d",len(buf)))
+      _, err = io.WriteString(w,string(buf))
       if err!=nil {
          Goose.Logf(1,"Internal server error writing response body for swagger.json: %s",err)
       }
@@ -972,7 +1009,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    }
 
    for _, endpoint = range svc.Svc {
-      Goose.Logf(5,"trying %s with endpoint: %s",r.URL.Path,endpoint.Path)
+      Goose.Logf(5,"trying %s with endpoint: %s",r.Method+":"+r.URL.Path,endpoint.Path)
       match = endpoint.Matcher.FindAllStringSubmatch(r.Method+":"+r.URL.Path,-1)
       if len(match) > 0 {
          Goose.Logf(5,"Found endpoint %s for: %s",endpoint.Path,r.URL.Path)
