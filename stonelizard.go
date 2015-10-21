@@ -13,6 +13,7 @@ import (
    "strconv"
    "strings"
    "reflect"
+//   "net/url"
    "net/http"
    "io/ioutil"
    "crypto/tls"
@@ -388,6 +389,63 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
    }
 }
 
+func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructField, method reflect.Method, methodName string, swaggerParametersIn []SwaggerParameterT) (list []string, parmcount int, pt reflect.Type, swaggerParameters  []SwaggerParameterT, err error) {
+   var lstFlds            string
+   var lstFld             string
+   var doc                string
+   var SwaggerParameter  *SwaggerParameterT
+
+   parmcount         = parmcountIn
+   swaggerParameters = swaggerParametersIn
+
+   list = []string{}
+   lstFlds = fld.Tag.Get(listEncoding)
+   if lstFlds != "" {
+      for _, lstFld = range strings.Split(lstFlds,",") {
+         parmcount++
+         if (parmcount+1) > method.Type.NumIn() {
+            Goose.Logf(1,"%s (with query) at method ", ErrorWrongParameterCount, methodName)
+            err = ErrorWrongParameterCount
+            return
+         }
+         pt = method.Type.In(parmcount)
+         SwaggerParameter, err = GetSwaggerType(pt)
+         if err != nil {
+            return
+         }
+
+         if SwaggerParameter == nil {
+            err = ErrorInvalidNilParam
+            return
+         }
+
+         if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
+            Goose.Logf(1,"%s: %s",lstFld)
+            err = ErrorInvalidParameterType
+            return
+         }
+
+
+         doc = fld.Tag.Get(lstFld)
+         if doc != "" {
+            SwaggerParameter.Schema.Description    = new(string)
+            (*SwaggerParameter.Schema.Description) = doc
+         }
+
+         SwaggerParameter.Name     = lstFld
+         SwaggerParameter.In       = listEncoding
+         SwaggerParameter.Required = true
+
+         swaggerParameters = append(swaggerParameters,*SwaggerParameter)
+         list              = append(list,lstFld)
+      }
+   }
+
+   Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+   return
+}
+
+
 
 func New(svcs ...EndPointHandler) (*Service, error) {
    var resp                *Service
@@ -427,9 +485,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var fldType              reflect.Type
    var doc                  string
    var description         *string
-   var hdrFlds              string
-   var hdrFld               string
    var headers            []string
+   var query              []string
 
    for _, svc = range svcs {
       Goose.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -643,47 +700,15 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
 
-            hdrFlds = fld.Tag.Get("header")
-            headers = []string{}
-            if hdrFlds != "" {
-               for _, hdrFld = range strings.Split(hdrFlds,",") {
-                  parmcount++
-                  if (parmcount+1) > method.Type.NumIn() {
-                     Goose.Logf(1,"%s (with header) at method ", ErrorWrongParameterCount, methodName)
-                     return nil, ErrorWrongParameterCount
-                  }
-                  pt = method.Type.In(parmcount)
-                  SwaggerParameter, err = GetSwaggerType(pt)
-                  if err != nil {
-                     return nil, err
-                  }
-
-                  if SwaggerParameter == nil {
-                     return nil, ErrorInvalidNilParam
-                  }
-
-                  if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                     Goose.Logf(1,"%s: %s",hdrFld)
-                     return nil, ErrorInvalidParameterType
-                  }
-
-
-                  doc = fld.Tag.Get(hdrFld)
-                  if doc != "" {
-                     SwaggerParameter.Schema.Description    = new(string)
-                     (*SwaggerParameter.Schema.Description) = doc
-                  }
-
-                  SwaggerParameter.Name     = hdrFld
-                  SwaggerParameter.In       = "header"
-                  SwaggerParameter.Required = true
-
-                  swaggerParameters = append(swaggerParameters,*SwaggerParameter)
-                  headers           = append(headers,hdrFld)
-               }
+            headers, parmcount, pt, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
             }
 
-            Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+            query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
+            }
 
             if fld.Tag.Get("postdata") != "" {
                parmcount++
@@ -808,6 +833,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                consumes: consumes,
                produces: produces,
                Headers: headers,
+               Query: query,
                Handle: buildHandle(svcRecv,method,pt),
             })
          }
@@ -929,6 +955,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var enc, e                 string
    var gzw                   *gzip.Writer
    var header                 string
+   var qry                    string
    var buf                  []byte
 
 
@@ -1029,7 +1056,18 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
          return
       }
-      match[0] = append(match[0],r.Header[header][0])
+      match[0] = append(match[0],r.Header[header][0]) // TODO array support
+   }
+
+   if len(endpoint.Query) > 0 {
+      r.ParseForm()
+      for _, qry = range endpoint.Query {
+         if _, ok := r.Form[qry]; !ok {
+            Goose.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
+            return
+         }
+         match[0] = append(match[0],r.Form[qry][0]) // TODO array support
+      }
    }
 
    Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
