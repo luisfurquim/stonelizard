@@ -5,11 +5,14 @@ import (
    "net"
    "errors"
    "regexp"
+   "reflect"
    "net/http"
    "crypto/x509"
    "crypto/rsa"
    "github.com/luisfurquim/goose"
 )
+
+type Void struct{}
 
 type StoppableListener struct {
   *net.TCPListener           // Wrapped listener
@@ -60,6 +63,8 @@ type UrlNode struct {
    consumes  string
    allowGzip bool
    Matcher  *regexp.Regexp
+   Headers []string
+   Query   []string
    Handle    func ([]string, Unmarshaler) Response
 }
 
@@ -131,7 +136,7 @@ type SwaggerInfoT struct {
 type SwaggerOperationT struct {
    // A list of tags for API documentation control.
    // Tags can be used for logical grouping of operations by resources or any other qualifier.
-   Tags  []string `json:"tags"`
+   Tags  []string `json:"tags,omitempty"`
 
    // A short summary of what the operation does.
    // For maximum readability in the swagger-ui, this field SHOULD be less than 120 characters.
@@ -141,7 +146,7 @@ type SwaggerOperationT struct {
    Description string `json:"description,omitempty"`
 
    // Additional external documentation for this operation.
-   ExternalDocs   SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
 
    // Unique string used to identify the operation.
    // The id MUST be unique among all operations described in the API.
@@ -253,7 +258,7 @@ type SwaggerSchemaT struct {
    Title string `json:"title,omitempty"`
 
    // GFM syntax can be used for rich text representation
-   Description string `json:"description,omitempty"`
+   Description *string `json:"description,omitempty"`
 
    // The type of the parameter / The internal type of the array.
    // Since the parameter is not located at the request body, it is limited to simple types (that is, not an object).
@@ -590,7 +595,7 @@ type SwaggerResponseT struct {
    // If this field does not exist, it means no content is returned as part of the response.
    // As an extension to the Schema Object, its root type value may also be "file".
    // This SHOULD be accompanied by a relevant produces mime-type.
-   Schema   SwaggerSchemaT `json:"schema,omitempty"`
+   Schema   *SwaggerSchemaT `json:"schema,omitempty"`
 
    // A list of headers that are sent with the response.
    Headers  map[string]SwaggerHeaderT `json:"headers,omitempty"`
@@ -644,7 +649,7 @@ type SwaggerTagT struct {
    Description string `json:"description,omitempty"`
 
    // Additional external documentation for this tag.
-   ExternalDocs   SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
 }
 
 type SwaggerExternalDocsT struct {
@@ -730,10 +735,20 @@ type SwaggerT struct {
    Tags              []SwaggerTagT            `json:"tags,omitempty"`
 
    // Additional external documentation.
-   ExternalDocs        SwaggerExternalDocsT   `json:"externalDocs,omitempty"`
+   ExternalDocs       *SwaggerExternalDocsT   `json:"externalDocs,omitempty"`
 }
 
 
+var voidType = reflect.TypeOf(Void{})
 var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
+<<<<<<< HEAD
 var ErrorDescriptionSyntax = errors.New("Syntax error on reponse description")
+=======
+var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
+var ErrorInvalidNilParam = errors.New("Syntax error nil parameter not allowed in this context")
+var ErrorWrongParameterCount = errors.New("Wrong parameter count")
+var ErrorInvalidParameterType = errors.New("Invalid parameter type")
+var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")
+var ErrorMissingRequiredQueryField = errors.New("Error missing required query field")
+>>>>>>> f8b7e656db58720ed6862e9ffbc35958fbfbee02

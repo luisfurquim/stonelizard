@@ -13,6 +13,7 @@ import (
    "strconv"
    "strings"
    "reflect"
+//   "net/url"
    "net/http"
    "io/ioutil"
    "crypto/tls"
@@ -102,11 +103,18 @@ func (svc Service) Close() {
 
 func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var item, subItem *SwaggerParameterT
-   var field reflect.StructField
-   var err error
-   var i int
+   var field          reflect.StructField
+   var doc            string
+   var description   *string
+   var err            error
+   var i              int
+   var fieldType      string
 
-   Goose.Logf(1,"Tipo do parametro: %d: %#v",parm.Kind(),parm)
+   Goose.Logf(6,"Tipo do parametro: %d: %#v",parm.Kind(),parm)
+
+   if parm == voidType {
+      return nil, nil
+   }
 
    if parm.Kind() == reflect.Bool {
       return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"boolean"}}, nil
@@ -133,7 +141,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    }
 
    if parm.Kind()==reflect.String {
-      Goose.Logf(1,"Got string")
+      Goose.Logf(6,"Got string")
       return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"string"}}, nil
    }
 
@@ -143,7 +151,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
    if (parm.Kind()==reflect.Array) || (parm.Kind()==reflect.Slice) {
       item, err = GetSwaggerType(parm.Elem())
-      if err != nil {
+      if (item==nil) || (err != nil) {
          return nil, err
       }
       return &SwaggerParameterT{
@@ -164,21 +172,42 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          Schema: SwaggerSchemaT{
             Required: []string{},
             Properties: map[string]SwaggerSchemaT{},
+//            Description: description,
          },
       }
+      Goose.Logf(6,"Got struct: %#v",item)
       for i=0; i<parm.NumField(); i++ {
          field = parm.Field(i)
+         Goose.Logf(6,"Struct field: %s",field.Name)
+         doc   = field.Tag.Get("doc")
+         if doc != "" {
+            description    = new(string)
+            (*description) = doc
+         } else {
+            description = nil
+         }
+
          subItem, err = GetSwaggerType(field.Type)
-         if err != nil {
+         if (subItem==nil) || (err != nil) {
             return nil, err
          }
          item.Schema.Required = append(item.Schema.Required,field.Name)
+         if subItem.Type != "" {
+            fieldType = subItem.Type
+         } else {
+            fieldType = subItem.Schema.Type
+         }
+
          item.Schema.Properties[field.Name] = SwaggerSchemaT{
-            Type:             subItem.Type,
+            Type:             fieldType,
             Format:           subItem.Format,
             Items:            subItem.Items,
+            Description:      description,
+            Required:         subItem.Schema.Required,
+            Properties:       subItem.Schema.Properties,
          }
       }
+      Goose.Logf(6,"Got final struct: %#v",item)
       return item, nil
    }
 
@@ -367,6 +396,63 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
    }
 }
 
+func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructField, method reflect.Method, methodName string, swaggerParametersIn []SwaggerParameterT) (list []string, parmcount int, pt reflect.Type, swaggerParameters  []SwaggerParameterT, err error) {
+   var lstFlds            string
+   var lstFld             string
+   var doc                string
+   var SwaggerParameter  *SwaggerParameterT
+
+   parmcount         = parmcountIn
+   swaggerParameters = swaggerParametersIn
+
+   list = []string{}
+   lstFlds = fld.Tag.Get(listEncoding)
+   if lstFlds != "" {
+      for _, lstFld = range strings.Split(lstFlds,",") {
+         parmcount++
+         if (parmcount+1) > method.Type.NumIn() {
+            Goose.Logf(1,"%s (with query) at method ", ErrorWrongParameterCount, methodName)
+            err = ErrorWrongParameterCount
+            return
+         }
+         pt = method.Type.In(parmcount)
+         SwaggerParameter, err = GetSwaggerType(pt)
+         if err != nil {
+            return
+         }
+
+         if SwaggerParameter == nil {
+            err = ErrorInvalidNilParam
+            return
+         }
+
+         if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
+            Goose.Logf(1,"%s: %s",lstFld)
+            err = ErrorInvalidParameterType
+            return
+         }
+
+
+         doc = fld.Tag.Get(lstFld)
+         if doc != "" {
+            SwaggerParameter.Schema.Description    = new(string)
+            (*SwaggerParameter.Schema.Description) = doc
+         }
+
+         SwaggerParameter.Name     = lstFld
+         SwaggerParameter.In       = listEncoding
+         SwaggerParameter.Required = true
+
+         swaggerParameters = append(swaggerParameters,*SwaggerParameter)
+         list              = append(list,lstFld)
+      }
+   }
+
+   Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+   return
+}
+
+
 
 func New(svcs ...EndPointHandler) (*Service, error) {
    var resp                *Service
@@ -404,6 +490,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var responseOk           string
    var responses map[string]SwaggerResponseT
    var fldType              reflect.Type
+   var doc                  string
+   var description         *string
+   var headers            []string
+   var query              []string
 
    for _, svc = range svcs {
       Goose.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -569,8 +659,21 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                         return nil, err
                      }
 
+                     if SwaggerParameter == nil {
+                        return nil, ErrorInvalidNilParam
+                     }
+
                      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                        return nil, errors.New(fmt.Sprintf("invalid parameter %s type",tk[1:len(tk)-1]))
+                        Goose.Logf(1,"%s: %s",tk[1:len(tk)-1])
+                        return nil, ErrorInvalidParameterType
+                     }
+
+                     doc = fld.Tag.Get(tk[1:len(tk)-1])
+                     if doc != "" {
+                        description    = new(string)
+                        (*description) = doc
+                     } else {
+                        description = SwaggerParameter.Schema.Description
                      }
 
                      swaggerParameters = append(
@@ -581,6 +684,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                            Required: true,
                            Schema: SwaggerSchemaT{
                               Type: SwaggerParameter.Schema.Type,
+                              Description: description,
                            },
                            Format: SwaggerParameter.Format,
                         })
@@ -601,7 +705,17 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             re += "{0,1}$"
 
-            Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+            Goose.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
+
+            headers, parmcount, pt, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
+            }
+
+            query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
+            }
 
             if fld.Tag.Get("postdata") != "" {
                parmcount++
@@ -612,6 +726,16 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                SwaggerParameter, err = GetSwaggerType(pt)
                if err != nil {
                   return nil, err
+               }
+
+               if SwaggerParameter == nil {
+                  return nil, ErrorInvalidNilParam
+               }
+
+               doc = fld.Tag.Get(fld.Tag.Get("postdata"))
+               if doc != "" {
+                  SwaggerParameter.Schema.Description    = new(string)
+                  (*SwaggerParameter.Schema.Description) = doc
                }
 
                SwaggerParameter.Name     = fld.Tag.Get("postdata")
@@ -645,14 +769,36 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                if fldType.Kind() == reflect.Ptr {
                   fldType = fldType.Elem()
                }
+
                SwaggerParameter, err = GetSwaggerType(fldType)
                if err != nil {
                   return nil, err
                }
 
-               responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
-                  Description: responseOk,
-                  Schema:      SwaggerParameter.Schema,
+               if SwaggerParameter == nil {
+                  responses[fmt.Sprintf("%d",http.StatusNoContent)] = SwaggerResponseT{
+                     Description: responseOk,
+                  }
+               } else {
+
+                  doc = fld.Tag.Get(fld.Name)
+
+                  if doc != "" {
+                     SwaggerParameter.Schema.Description    = new(string)
+                     (*SwaggerParameter.Schema.Description) = doc
+                  }
+
+                  if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+                     SwaggerParameter.Schema.Type = SwaggerParameter.Type
+                  }
+
+                  responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
+                     Description: responseOk,
+                     Schema:      &SwaggerSchemaT{},
+                  }
+                  (*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = SwaggerParameter.Schema
+                  //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+                  Goose.Logf(6,"====== %#v",*responses[fmt.Sprintf("%d",http.StatusOK)].Schema)
                }
             } else {
                if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
@@ -662,9 +808,15 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      if err != nil {
                         return nil, err
                      }
-                     responses[responseStatus] = SwaggerResponseT{
-                        Description: responseSchema.Description,
-                        Schema:      SwaggerParameter.Schema,
+                     if SwaggerParameter == nil {
+                        responses[responseStatus] = SwaggerResponseT{
+                           Description: responseSchema.Description,
+                        }
+                     } else {
+                        responses[responseStatus] = SwaggerResponseT{
+                           Description: responseSchema.Description,
+                           Schema:      &SwaggerParameter.Schema,
+                        }
                      }
                   }
                }
@@ -687,6 +839,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Matcher: regexp.MustCompile(re),
                consumes: consumes,
                produces: produces,
+               Headers: headers,
+               Query: query,
                Handle: buildHandle(svcRecv,method,pt),
             })
          }
@@ -703,6 +857,15 @@ func (svc *Service) ListenAndServeTLS() error {
    var aType  tls.ClientAuthType
    var wg     sync.WaitGroup
    var crypls net.Listener
+   var hn                   string
+
+   if svc.ListenAddress[0] == ':' {
+      hn, err = os.Hostname()
+      if err!=nil {
+         Goose.Logf(1,"Error checking hostname: %s", err)
+         return err
+      }
+   }
 
    if svc.AuthRequired {
       aType = tls.RequireAndVerifyClientCert
@@ -714,7 +877,7 @@ func (svc *Service) ListenAndServeTLS() error {
    Goose.Logf(6,"auth: %#v",aType)
 
    srv := &http.Server{
-      Addr: svc.ListenAddress,
+      Addr: hn + svc.ListenAddress,
       Handler: svc,
 
       TLSConfig: &tls.Config{
@@ -736,7 +899,7 @@ func (svc *Service) ListenAndServeTLS() error {
    crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
 
    srvcrl := &http.Server{
-      Addr: svc.CRLListenAddress,
+      Addr: hn + svc.CRLListenAddress,
       Handler: svc.Auth,
    }
 
@@ -799,6 +962,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var encRequest           []string
    var enc, e                 string
    var gzw                   *gzip.Writer
+   var header                 string
+   var qry                    string
+   var buf                  []byte
 
 
    Goose.Logf(5,"Peer certificates")
@@ -853,11 +1019,24 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    Goose.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
-      mrsh = json.NewEncoder(w)
+      defer func() {
+         Goose.Logf(5,"Testing the need to recover...")
+         if r := recover(); r != nil {
+            Goose.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
+         }
+         Goose.Logf(5,"Tested the need to recover!!!")
+      }()
       hd.Add("Content-Type","application/json")
-      w.WriteHeader(http.StatusOK)
+//      w.WriteHeader(http.StatusOK)
       Goose.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
-      err = mrsh.Encode(svc.Swagger)
+//      mrsh = json.NewEncoder(w)
+//      err = mrsh.Encode(svc.Swagger)
+      buf, err = json.Marshal(svc.Swagger)
+      if err!=nil {
+         Goose.Logf(1,"Internal server error marshaling swagger.json: %s",err)
+      }
+      hd.Add("Content-Length", fmt.Sprintf("%d",len(buf)))
+      _, err = io.WriteString(w,string(buf))
       if err!=nil {
          Goose.Logf(1,"Internal server error writing response body for swagger.json: %s",err)
       }
@@ -865,7 +1044,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    }
 
    for _, endpoint = range svc.Svc {
-      Goose.Logf(5,"trying %s with endpoint: %s",r.URL.Path,endpoint.Path)
+      Goose.Logf(5,"trying %s with endpoint: %s",r.Method+":"+r.URL.Path,endpoint.Path)
       match = endpoint.Matcher.FindAllStringSubmatch(r.Method+":"+r.URL.Path,-1)
       if len(match) > 0 {
          Goose.Logf(5,"Found endpoint %s for: %s",endpoint.Path,r.URL.Path)
@@ -878,6 +1057,25 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       w.WriteHeader(http.StatusBadRequest)
       w.Write([]byte("Invalid service handler " + r.URL.Path))
       return
+   }
+
+   for _, header = range endpoint.Headers {
+      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
+         Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         return
+      }
+      match[0] = append(match[0],r.Header[header][0]) // TODO array support
+   }
+
+   if len(endpoint.Query) > 0 {
+      r.ParseForm()
+      for _, qry = range endpoint.Query {
+         if _, ok := r.Form[qry]; !ok {
+            Goose.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
+            return
+         }
+         match[0] = append(match[0],r.Form[qry][0]) // TODO array support
+      }
    }
 
    Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
@@ -935,10 +1133,13 @@ gzipcheck:
       w.WriteHeader(resp.Status)
    }
 
-   err = mrsh.Encode(resp.Body)
-   if err!=nil {
-      Goose.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
-      return
+
+   if resp.Status != http.StatusNoContent {
+      err = mrsh.Encode(resp.Body)
+      if err!=nil {
+         Goose.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
+         return
+      }
    }
 
 }
