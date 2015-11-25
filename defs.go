@@ -742,13 +742,9 @@ type SwaggerT struct {
 var voidType = reflect.TypeOf(Void{})
 var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
-<<<<<<< HEAD
-var ErrorDescriptionSyntax = errors.New("Syntax error on reponse description")
-=======
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
 var ErrorInvalidNilParam = errors.New("Syntax error nil parameter not allowed in this context")
 var ErrorWrongParameterCount = errors.New("Wrong parameter count")
 var ErrorInvalidParameterType = errors.New("Invalid parameter type")
 var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")
 var ErrorMissingRequiredQueryField = errors.New("Error missing required query field")
->>>>>>> f8b7e656db58720ed6862e9ffbc35958fbfbee02
