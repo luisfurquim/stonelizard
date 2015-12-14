@@ -10,6 +10,7 @@ import (
    "encoding/pem"
 )
 
+//Convert the UrlNode field value, from the Service struct, into a string
 func (svc Service) String() string {
    var s string
 
@@ -21,6 +22,7 @@ func (svc Service) String() string {
    return s
 }
 
+//Convert the Handle field value, from UrlNode struct, into a Go-syntax string (method signature)
 func (u UrlNode) String() string {
    var s string
 
@@ -47,6 +49,7 @@ func (svc Service) ReadPem(pembuf *[]byte, path string) error {
    return nil
 }
 
+//Load in memory and decodes the microservice certificate from the PemPath field of Service struct
 func (svc Service) ReadCert(pembuf *[]byte, cert **x509.Certificate, path string) error {
    var err error
 
@@ -66,6 +69,7 @@ func (svc Service) ReadCert(pembuf *[]byte, cert **x509.Certificate, path string
    return nil
 }
 
+//Load in memory the Certificate Revogation List from the PemPath field of Service struct
 func (svc Service) ReadCRL(buf *[]byte, path string) error {
    var err error
 

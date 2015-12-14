@@ -74,6 +74,8 @@ type Service struct {
    ListenAddress      string `json:"listen"`
    CRLListenAddress   string `json:"crllisten"`
    Svc              []UrlNode
+   
+   //Sets the directory in which the certificates are stored.
    PemPath            string `json:"pem"`
    AuthRequired       bool
    AllowGzip          bool

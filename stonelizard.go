@@ -29,7 +29,7 @@ import (
 var ErrorNoRoot error = errors.New("No service root specified")
 var ErrorServiceSyntax error = errors.New("Syntax error on service definition")
 
-
+//Init the listener for the service.
 func NewListener(l net.Listener) (*StoppableListener, error) {
    tcpL, ok := l.(*net.TCPListener)
 
@@ -44,7 +44,8 @@ func NewListener(l net.Listener) (*StoppableListener, error) {
    return retval, nil
 }
 
-func (sl *StoppableListener) Accept() (net.Conn, error) {//wrapper em cima do accept do sistema
+//Implements a wrapper on the system accept
+func (sl *StoppableListener) Accept() (net.Conn, error) {
 
    for {
       Goose.Logf(6,"Start accept loop")
@@ -86,10 +87,13 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {//wrapper em cima do ac
    }
 }
 
+//Stop the service and releases the chanel
 func (sl *StoppableListener) Stop() {
    close(sl.stop)
 }
 
+
+//Close the webservices and the listeners
 func (svc Service) Close() {
    svc.Listener.Stop()
    svc.Listener.Close()
@@ -255,6 +259,9 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    return nil, errors.New(fmt.Sprintf("invalid parameter %s type",name))
 }
 
+
+//From the endpoint, defined in the Service struct, init the variables, the certificates infrastructure and the server listeners.
+//Besides, load de configuration file to start basic data required for the proposed solution. 
 func initSvc(svcElem EndPointHandler) (*Service, error) {
    var err             error
    var resp           *Service
@@ -963,6 +970,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 }
 
 
+//Init a webserver and wait for http requests.
 func (svc *Service) ListenAndServeTLS() error {
    var err    error
    var aType  tls.ClientAuthType
