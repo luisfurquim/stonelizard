@@ -31,7 +31,7 @@ func (u UrlNode) String() string {
    return s
 }
 
-func (svc Service) readPem(pembuf *[]byte, path string) error {
+func (svc Service) ReadPem(pembuf *[]byte, path string) error {
    var err error
 /*
    if (path[0] != '/') && (path[0] != '.') {
@@ -47,10 +47,10 @@ func (svc Service) readPem(pembuf *[]byte, path string) error {
    return nil
 }
 
-func (svc Service) readCert(pembuf *[]byte, cert **x509.Certificate, path string) error {
+func (svc Service) ReadCert(pembuf *[]byte, cert **x509.Certificate, path string) error {
    var err error
 
-   err = svc.readPem(pembuf,path)
+   err = svc.ReadPem(pembuf,path)
    if err != nil {
       Goose.Logf(1,"Failed reading Cert %s",err)
       return err
@@ -66,7 +66,7 @@ func (svc Service) readCert(pembuf *[]byte, cert **x509.Certificate, path string
    return nil
 }
 
-func (svc Service) readCRL(buf *[]byte, path string) error {
+func (svc Service) ReadCRL(buf *[]byte, path string) error {
    var err error
 
    if (path[0] != '/') && (path[0] != '.') {
@@ -82,10 +82,10 @@ func (svc Service) readCRL(buf *[]byte, path string) error {
    return nil
 }
 
-func (svc Service) readEcdsaKey(pembuf *[]byte, key **ecdsa.PrivateKey, path string) error {
+func (svc Service) ReadEcdsaKey(pembuf *[]byte, key **ecdsa.PrivateKey, path string) error {
    var err error
 
-   err = svc.readPem(pembuf,path)
+   err = svc.ReadPem(pembuf,path)
    if err != nil {
       Goose.Logf(1,"Failed reading Key %s",err)
       return err
@@ -101,10 +101,10 @@ func (svc Service) readEcdsaKey(pembuf *[]byte, key **ecdsa.PrivateKey, path str
    return nil
 }
 
-func (svc Service) readRsaKey(pembuf *[]byte, key **rsa.PrivateKey, path string) error {
+func (svc Service) ReadRsaKey(pembuf *[]byte, key **rsa.PrivateKey, path string) error {
    var err error
 
-   err = svc.readPem(pembuf,path)
+   err = svc.ReadPem(pembuf,path)
    if err != nil {
       Goose.Logf(1,"Failed reading Key %s",err)
       return err

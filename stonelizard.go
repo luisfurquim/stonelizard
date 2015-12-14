@@ -106,39 +106,43 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var i              int
    var fieldType      string
 
-   Goose.Logf(6,"Tipo do parametro: %d: %#v",parm.Kind(),parm)
+   Goose.Logf(6,"Tipo do parametro: %d: %s",parm.Kind(),parm)
 
    if parm == voidType {
       return nil, nil
    }
 
+   if parm.Kind() == reflect.Interface {
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"*"}}, nil
+   }
+
    if parm.Kind() == reflect.Bool {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"boolean"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"boolean"}}, nil
    }
 
    if (parm.Kind()>=reflect.Int) && (parm.Kind()<=reflect.Int32) {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer", Format: "int32"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"integer", Format: "int32"}}, nil
    }
 
    if parm.Kind()==reflect.Int64 {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer", Format: "int64"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"integer", Format: "int64"}}, nil
    }
 
    if (parm.Kind()>=reflect.Uint) && (parm.Kind()<=reflect.Uint64) {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"integer"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"integer"}}, nil
    }
 
    if parm.Kind()==reflect.Float32 {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"number", Format: "float"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"number", Format: "float"}}, nil
    }
 
    if parm.Kind()==reflect.Float64 {
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"number", Format: "double"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"number", Format: "double"}}, nil
    }
 
    if parm.Kind()==reflect.String {
       Goose.Logf(6,"Got string")
-      return &SwaggerParameterT{Schema: SwaggerSchemaT{Type:"string"}}, nil
+      return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"string"}}, nil
    }
 
    if parm.Kind()==reflect.Ptr {
@@ -147,25 +151,61 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
    if (parm.Kind()==reflect.Array) || (parm.Kind()==reflect.Slice) {
       item, err = GetSwaggerType(parm.Elem())
-      if (item==nil) || (err != nil) {
+      if (item==nil) || (err!=nil) || (item.Schema==nil) {
          return nil, err
       }
       return &SwaggerParameterT{
          Type:"array",
          Items: &SwaggerItemT{
-            Type:             item.Type,
-            Format:           item.Format,
-            Items:            item.Items,
-            CollectionFormat: item.CollectionFormat,
+            Type:             item.Schema.Type,
+            Format:           item.Schema.Format,
+            Items:            item.Schema.Items,
+         },
+         Schema: &SwaggerSchemaT{
+            Type: item.Schema.Type,
          },
          CollectionFormat: "csv",
+      }, nil // TODO: allow more collection formats
+   }
+
+   if parm.Kind()==reflect.Map {
+      item, err = GetSwaggerType(parm.Elem())
+      if (item==nil) || (err!=nil) || (item.Schema==nil) {
+         return nil, err
+      }
+
+      kname   := parm.Key().Name()
+      ktype   := ""
+      kformat := ""
+      if kname == "string" {
+         ktype = "string"
+      } else {
+         ktype   = "integer"
+         if kname[len(kname)-2:] == "64" {
+            kformat = "int64"
+         } else {
+            kformat = "int32"
+         }
+      }
+
+      return &SwaggerParameterT{
+         Type:"array",
+         Items: &SwaggerItemT{
+            Type:              item.Schema.Type,
+            Format:            item.Schema.Format,
+            Items:             item.Schema.Items,
+         },
+         XKeyType:             ktype,
+         XKeyFormat:           kformat,
+         CollectionFormat:     "csv",
+         XCollectionFormat:    "cskv",
       }, nil // TODO: allow more collection formats
    }
 
    if parm.Kind()==reflect.Struct {
       item = &SwaggerParameterT{
          Type:"object",
-         Schema: SwaggerSchemaT{
+         Schema: &SwaggerSchemaT{
             Required: []string{},
             Properties: map[string]SwaggerSchemaT{},
 //            Description: description,
@@ -184,7 +224,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          }
 
          subItem, err = GetSwaggerType(field.Type)
-         if (subItem==nil) || (err != nil) {
+         if (subItem==nil) || (err != nil) || (subItem.Schema==nil) {
             return nil, err
          }
          item.Schema.Required = append(item.Schema.Required,field.Name)
@@ -207,7 +247,12 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
       return item, nil
    }
 
-   return nil, errors.New(fmt.Sprintf("invalid parameter %s type",parm.Name()))
+   name := parm.Name()
+   if name == "" {
+      name = fmt.Sprintf("%s /// %#v",parm,parm)
+   }
+
+   return nil, errors.New(fmt.Sprintf("invalid parameter %s type",name))
 }
 
 func initSvc(svcElem EndPointHandler) (*Service, error) {
@@ -269,18 +314,18 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       return nil, err
    }
 
-   err = resp.readCert(&resp.Auth.CACertPem,     &resp.Auth.CACert,     resp.PemPath + "/rootCA.crt")
+   err = resp.ReadCert(&resp.Auth.CACertPem,     &resp.Auth.CACert,     resp.PemPath + "/rootCA.crt")
    if err != nil {
       Goose.Logf(1,"Failed reading rootCA.crt file: %s", err)
       return nil, err
    }
-   err = resp.readCert(&resp.Auth.ServerCertPem, &resp.Auth.ServerCert, resp.PemPath + "/server.crt")
+   err = resp.ReadCert(&resp.Auth.ServerCertPem, &resp.Auth.ServerCert, resp.PemPath + "/server.crt")
    if err != nil {
       Goose.Logf(1,"Failed reading server.crt file: %s", err)
       return nil, err
    }
 
-   err = resp.readCRL(&resp.Auth.CACRL, "rootCA.crl")
+   err = resp.ReadCRL(&resp.Auth.CACRL, "rootCA.crl")
    if err != nil {
       Goose.Logf(1,"Failed reading rootCA.crl file: %s", err)
       return nil, err
@@ -292,13 +337,13 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 //      Goose.Logf(1,"Failed reading rootCA.key file: %s", err)
 //      return nil, err
 //   }
-   err = resp.readRsaKey(&resp.Auth.CAKeyPem,   &resp.Auth.CAKey,  resp.PemPath + "/rootCA.key")
+   err = resp.ReadRsaKey(&resp.Auth.CAKeyPem,   &resp.Auth.CAKey,  resp.PemPath + "/rootCA.key")
    if err != nil {
       Goose.Logf(1,"Failed reading rootCA.key file: %s", err)
       return nil, err
    }
 
-   err = resp.readRsaKey(&resp.Auth.ServerKeyPem,   &resp.Auth.ServerKey,  resp.PemPath + "/server.key")
+   err = resp.ReadRsaKey(&resp.Auth.ServerKeyPem,   &resp.Auth.ServerKey,  resp.PemPath + "/server.key")
    if err != nil {
       Goose.Logf(1,"Failed reading server.key file: %s", err)
       return nil, err
@@ -312,19 +357,19 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
          return nil
       }
 
-      err = resp.readCert(&ClientCertPem, &ClientCert, path)
+      err = resp.ReadCert(&ClientCertPem, &ClientCert, path)
       if err != nil {
          Goose.Logf(1,"Failed reading %s file: %s", path, err)
          return err
       }
 
       CertIdStr = strings.Split(ClientCert.Subject.CommonName,":")
-      if len(CertIdStr) != 2 {
+      if len(CertIdStr) > 2 {
          Goose.Logf(1,"Failed extracting %s subject name",ClientCert.Subject.CommonName)
          return err
       }
 
-      fmt.Sscanf(CertIdStr[1],"%d",&CertId)
+      fmt.Sscanf(CertIdStr[len(CertIdStr)-1],"%d",&CertId)
       if resp.UserCerts == nil {
          resp.UserCerts = map[int]*x509.Certificate{CertId:ClientCert}
       } else {
@@ -341,27 +386,75 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
    return func (parms []string, Unmarshal Unmarshaler) Response {
       var httpResp Response
       var i int
-      var p string
+      var p, ptmp string
 //                  var outs []reflect.Value
       var ins []reflect.Value
       var parm reflect.Value
       var parmType reflect.Type
+      var parmTypeName string
       var err error
       var postvalue reflect.Value
+      var elemDelim, keyDelim string
+      var keyval string
+      var arrKeyVal []string
 
       ins = []reflect.Value{this}
       for i, p = range parms {
          Goose.Logf(5,"parm: %d:%s",i+1,p)
          parmType = met.Type.In(i+1)
-         if parmType.Name() == "string" {
+         parmTypeName = parmType.Name()
+         if parmTypeName == "string" {
             p = "\"" + p + "\""
+
+         } else if (parmType.Kind() == reflect.Array) || (parmType.Kind() == reflect.Slice) {
+            parmTypeName = "[]" + parmType.Elem().Name()
+            if parmType.Elem().Name() == "string" {
+               p = "[\"" + strings.Replace(p,",","\",\"",-1) + "\"]"
+            } else {
+               p = "[" + p + "]"
+            }
+         } else if parmType.Kind() == reflect.Map {
+            parmTypeName = "map[" + parmType.Key().Name() + "]" + parmType.Elem().Name()
+            if parmType.Elem().Name() == "string" {
+               elemDelim = "\""
+            } else {
+               elemDelim = ""
+            }
+
+            if parmType.Key().Name() == "string" {
+               keyDelim = "\""
+            } else {
+               keyDelim = ""
+            }
+            ptmp = ""
+            for _, keyval = range strings.Split(p,",") {
+               arrKeyVal = strings.Split(keyval,":")
+               if len(arrKeyVal) != 2 {
+                  Goose.Logf(1,"map parameter encoding error: %s",err)
+                  httpResp.Status = http.StatusInternalServerError
+                  httpResp.Body   = "Internal server error"
+                  httpResp.Header = map[string]string{}
+                  Goose.Logf(1,"Internal server error on map parameter encoding %s: %s",p,err)
+                  return httpResp
+               }
+               if len(ptmp)>0 {
+                  ptmp += ","
+               }
+               ptmp += keyDelim + arrKeyVal[0] + keyDelim + ":" + elemDelim + arrKeyVal[1] + elemDelim
+            }
+            p = "{" + ptmp + "}"
          }
-         Goose.Logf(5,"parmtype: %s",parmType.Name())
+         Goose.Logf(5,"parmtype: %s",parmTypeName)
+         Goose.Logf(4,"parmcoding: %s",p)
          parm = reflect.New(parmType)
          err = json.Unmarshal([]byte(p),parm.Interface())
          if err != nil {
-            Goose.Logf(1,"marshal error: %s",err)
-            os.Exit(1)
+            Goose.Logf(1,"unmarshal error: %s",err)
+            httpResp.Status = http.StatusInternalServerError
+            httpResp.Body   = "Internal server error"
+            httpResp.Header = map[string]string{}
+            Goose.Logf(1,"Internal server error parsing %s: %s",p,err)
+            return httpResp
          }
          ins = append(ins,reflect.Indirect(parm))
          Goose.Logf(5,"ins: %d:%s",len(ins),ins)
@@ -370,14 +463,13 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
 //                  Goose.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
       Goose.Logf(6,"posttype: %#v",posttype)
       if posttype != nil {
-         Goose.Logf(6,"postvalue: %#v",postvalue)
          postvalue = reflect.New(posttype)
          err = Unmarshal.Decode(postvalue.Interface())
          if err != nil {
             httpResp.Status = http.StatusInternalServerError
             httpResp.Body   = "Internal server error"
             httpResp.Header = map[string]string{}
-            Goose.Logf(1,"Internal server error: %s - postvalue: %s",err,postvalue.Interface())
+            Goose.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Interface())
             return httpResp
          }
          Goose.Logf(6,"postvalue: %#v",postvalue)
@@ -419,22 +511,41 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
             return
          }
 
-         if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-            Goose.Logf(1,"%s: %s",lstFld)
+/*
+         if SwaggerParameter.Schema.Required != nil {
+            Goose.Logf(1,"%s: %s",ErrorInvalidParameterType,lstFld)
+            Goose.Logf(1,"SwaggerParameter: %#v",SwaggerParameter)
             err = ErrorInvalidParameterType
             return
          }
-
+*/
 
          doc = fld.Tag.Get(lstFld)
          if doc != "" {
-            SwaggerParameter.Schema.Description    = new(string)
-            (*SwaggerParameter.Schema.Description) = doc
+            SwaggerParameter.Description = doc
          }
 
          SwaggerParameter.Name     = lstFld
          SwaggerParameter.In       = listEncoding
          SwaggerParameter.Required = true
+         SwaggerParameter.Schema   = nil
+
+         if pt.Kind() == reflect.Map {
+            if SwaggerParameter.Items == nil {
+               SwaggerParameter.Items = &SwaggerItemT{}
+            }
+            kname := pt.Key().Name()
+            if kname == "string" {
+               SwaggerParameter.Items.XKeyType = "string"
+            } else {
+               SwaggerParameter.Items.XKeyType   = "integer"
+               if kname[len(kname)-2:] == "64" {
+                  SwaggerParameter.Items.XKeyFormat = "int64"
+               } else {
+                  SwaggerParameter.Items.XKeyFormat = "int32"
+               }
+            }
+         }
 
          swaggerParameters = append(swaggerParameters,*SwaggerParameter)
          list              = append(list,lstFld)
@@ -669,16 +780,20 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                         description = SwaggerParameter.Schema.Description
                      }
 
+                     xkeytype := ""
+                     if SwaggerParameter.Schema != nil {
+                        xkeytype = SwaggerParameter.Schema.XKeyType
+                     }
+
                      swaggerParameters = append(
                         swaggerParameters,
                         SwaggerParameterT{
                            Name: tk[1:len(tk)-1],
                            In:   "path",
                            Required: true,
-                           Schema: SwaggerSchemaT{
-                              Type: SwaggerParameter.Schema.Type,
-                              Description: description,
-                           },
+                           Type: SwaggerParameter.Schema.Type,
+                           XKeyType: xkeytype,
+                           Description: *description,
                            Format: SwaggerParameter.Format,
                         })
                   } else if (tk[0]!='{') && (tk[len(tk)-1]!='}') {
@@ -700,12 +815,12 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
 
-            headers, parmcount, pt, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
+            query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
             if err != nil {
                return nil, err
             }
 
-            query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
+            headers, parmcount, pt, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
             if err != nil {
                return nil, err
             }
@@ -781,17 +896,21 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      (*SwaggerParameter.Schema.Description) = doc
                   }
 
+                  if SwaggerParameter.Schema == nil {
+                     SwaggerParameter.Schema = &SwaggerSchemaT{}
+                  }
+
                   if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
                      SwaggerParameter.Schema.Type = SwaggerParameter.Type
                   }
 
                   responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
                      Description: responseOk,
-                     Schema:      &SwaggerSchemaT{},
+                     Schema:      SwaggerParameter.Schema,
                   }
-                  (*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = SwaggerParameter.Schema
+                  //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
                   //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                  Goose.Logf(6,"====== %#v",*responses[fmt.Sprintf("%d",http.StatusOK)].Schema)
+                  Goose.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
                }
             } else {
                if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
@@ -808,7 +927,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      } else {
                         responses[responseStatus] = SwaggerResponseT{
                            Description: responseSchema.Description,
-                           Schema:      &SwaggerParameter.Schema,
+                           Schema:      SwaggerParameter.Schema,
                         }
                      }
                   }
@@ -1051,14 +1170,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   for _, header = range endpoint.Headers {
-      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
-         Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
-         return
-      }
-      match[0] = append(match[0],r.Header[header][0]) // TODO array support
-   }
-
    if len(endpoint.Query) > 0 {
       r.ParseForm()
       for _, qry = range endpoint.Query {
@@ -1068,6 +1179,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          }
          match[0] = append(match[0],r.Form[qry][0]) // TODO array support
       }
+   }
+
+   for _, header = range endpoint.Headers {
+      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
+         Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         return
+      }
+      match[0] = append(match[0],r.Header[header][0]) // TODO array support
    }
 
    Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)

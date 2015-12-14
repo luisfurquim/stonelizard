@@ -361,6 +361,9 @@ type SwaggerSchemaT struct {
 
    // A free-form property to include a an example of an instance for this schema.
    Example  interface{} `json:"example,omitempty"`
+
+   // Custom stonelizard extension. Specifies the type of the key. Used for key-value data types
+   XKeyType string `json:"x-keytype,omitempty"`
 }
 
 type SwaggerItemT struct {
@@ -428,6 +431,11 @@ type SwaggerItemT struct {
    //   Default value is csv.
    CollectionFormat  string         `json:"collectionFormat,omitempty"`
 
+   // Custom stonelizard extension. Specifies the type of the key. Used for key-value data types
+   XKeyType    string `json:"x-keytype,omitempty"`
+
+   // Custom stonelizard extension. Specifies the format of the key. Used for key-value data types
+   XKeyFormat  string `json:"x-keyformat,omitempty"`
 }
 
 type SwaggerParameterT struct {
@@ -452,7 +460,7 @@ type SwaggerParameterT struct {
    Required          bool  `json:"required"`
 
    // The schema defining the type used for the body parameter.
-   Schema            SwaggerSchemaT  `json:"schema,omitempty"` // required if in=="body"
+   Schema            *SwaggerSchemaT  `json:"schema,omitempty"` // required if in=="body"
 
    // Sets the ability to pass empty-valued parameters.
    // This is valid only for either query or formData parameters and allows you to send a parameter with a name only or an empty value.
@@ -522,6 +530,15 @@ type SwaggerParameterT struct {
    //   multi - corresponds to multiple parameter instances instead of multiple values for a single instance foo=bar&foo=baz. This is valid only for parameters in "query" or "formData".
    //   Default value is csv.
    CollectionFormat  string         `json:"collectionFormat,omitempty"`
+
+   // Custom stonelizard extension. Currently it only accepts cskv (comma separated key-values: k1:v1,...,kn:vn)
+   XCollectionFormat  string         `json:"x-collectionFormat,omitempty"`
+
+   // Custom stonelizard extension. Specifies the type of the key. Used for key-value data types
+   XKeyType    string `json:"x-keytype,omitempty"`
+
+   // Custom stonelizard extension. Specifies the format of the key. Used for key-value data types
+   XKeyFormat  string `json:"x-keyformat,omitempty"`
 }
 
 type SwaggerHeaderT struct {
@@ -738,6 +755,8 @@ type SwaggerT struct {
 
 
 var voidType = reflect.TypeOf(Void{})
+var float64Type = reflect.TypeOf(float64(0))
+
 var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
