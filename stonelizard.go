@@ -261,7 +261,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
 
 //From the endpoint, defined in the Service struct, init the variables, the certificates infrastructure and the server listeners.
-//Besides, load de configuration file to start basic data required for the proposed solution. 
+//Besides, load de configuration file to start basic data required for the proposed solution.
 func initSvc(svcElem EndPointHandler) (*Service, error) {
    var err             error
    var resp           *Service
@@ -503,7 +503,7 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
       for _, lstFld = range strings.Split(lstFlds,",") {
          parmcount++
          if (parmcount+1) > method.Type.NumIn() {
-            Goose.Logf(1,"%s (with query) at method ", ErrorWrongParameterCount, methodName)
+            Goose.Logf(1,"%s (with query) at method %s", ErrorWrongParameterCount, methodName)
             err = ErrorWrongParameterCount
             return
          }
@@ -1192,6 +1192,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    for _, header = range endpoint.Headers {
       if (r.Header[header]==nil) || (len(r.Header[header])==0) {
          Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         Goose.Logf(6,"HTTP Headers found: %#v",r.Header)
          return
       }
       match[0] = append(match[0],r.Header[header][0]) // TODO array support
