@@ -7,9 +7,8 @@ import (
    "regexp"
    "reflect"
    "net/http"
-   "crypto/x509"
-   "crypto/rsa"
    "github.com/luisfurquim/goose"
+   "github.com/luisfurquim/stonelizard/certkit"
 )
 
 type Void struct{}
@@ -19,25 +18,12 @@ type StoppableListener struct {
    stop             chan int // Channel used only to indicate listener should shutdown
 }
 
-type ServerCert struct {
-   ServerCertPem, CACertPem []byte
-   ServerCert,    CACert     *x509.Certificate
-   ServerKeyPem,  CAKeyPem  []byte
-   ServerKey                 *rsa.PrivateKey
-   CAKey                     *rsa.PrivateKey
-   CACRL                    []byte
-}
-
 type Unmarshaler interface {
    Decode(v interface{}) error
 }
 
 type Marshaler interface {
    Encode(v interface{}) error
-}
-
-type EndPointHandler interface {
-   GetConfig() (io.Reader, error)
 }
 
 type Response struct {
@@ -68,13 +54,37 @@ type UrlNode struct {
    Handle    func ([]string, Unmarshaler) Response
 }
 
+type EndPointHandler interface {
+   GetConfig() (Shaper, error)
+}
+
+type Shaper interface {
+   PageNotFound()     []byte
+   ListenAddress()      string
+   CRLListenAddress()   string
+   CertKit()           *certkit.CertKit
+}
+
+type Service struct {
+   Svc              []UrlNode
+   Config             Shaper
+   AuthRequired       bool
+   AllowGzip          bool
+   EnableCORS         bool
+   Listener          *StoppableListener
+   CRLListener       *StoppableListener
+   Swagger           *SwaggerT
+//   CAServer           CAServerT
+}
+
+/*
 type Service struct {
    PageNotFoundPath   string `json:"pageNotFound"`
    PageNotFound     []byte
    ListenAddress      string `json:"listen"`
    CRLListenAddress   string `json:"crllisten"`
    Svc              []UrlNode
-   
+
    //Sets the directory in which the certificates are stored.
    PemPath            string `json:"pem"`
    AuthRequired       bool
@@ -87,6 +97,8 @@ type Service struct {
    CRLListener       *StoppableListener
    Swagger           *SwaggerT
 }
+
+*/
 
 type ResponseT struct {
    Description string

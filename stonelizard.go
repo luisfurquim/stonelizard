@@ -15,16 +15,41 @@ import (
    "reflect"
 //   "net/url"
    "net/http"
-   "io/ioutil"
+//   "io/ioutil"
    "crypto/tls"
    "crypto/x509"
    "encoding/xml"
    "encoding/json"
    "compress/gzip"
-   "path/filepath"
+//   "path/filepath"
 )
 
 // http://www.hydrogen18.com/blog/stop-listening-http-server-go.html
+
+//Convert the UrlNode field value, from the Service struct, into a string
+func (svc Service) String() string {
+   var s string
+
+   if svc.Config.PageNotFound() != nil {
+      s = "404: " + string(svc.Config.PageNotFound()) + "\n"
+   }
+
+   s += fmt.Sprintf("%s",svc.Svc)
+   return s
+}
+
+//Convert the Handle field value, from UrlNode struct, into a Go-syntax string (method signature)
+func (u UrlNode) String() string {
+   var s string
+
+   if u.Handle != nil {
+      s = fmt.Sprintf("Method: %#v\n",u.Handle)
+   }
+
+   return s
+}
+
+
 
 var ErrorNoRoot error = errors.New("No service root specified")
 var ErrorServiceSyntax error = errors.New("Syntax error on service definition")
@@ -266,12 +291,14 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    var err             error
    var resp           *Service
 //   var svcRecv         reflect.Value
-   var cfg             io.Reader
+   var cfg             Shaper
    var ls              net.Listener
+/*
    var ClientCertPem []byte
    var ClientCert     *x509.Certificate
    var CertIdStr     []string
    var CertId          int
+*/
 
    resp = &Service{
       AuthRequired: false,
@@ -283,14 +310,23 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       return nil, err
    }
 
+   if cfg == nil {
+      return nil, nil
+   }
+
+/*
+   //TODO: shaper -> remover
    err = json.NewDecoder(cfg).Decode(&resp)
 
    if (err!=nil) && (err!=io.EOF) {
       Goose.Logf(1,"Failed parsing config file: %s", err)
       return nil, err
    }
+*/
 
-   ls, err = net.Listen("tcp", resp.ListenAddress)
+   resp.Config = cfg
+
+   ls, err = net.Listen("tcp", cfg.ListenAddress())
    if err != nil {
       Goose.Logf(1,"Failed creating listener: %s", err)
       return nil, err
@@ -303,7 +339,7 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    }
 
 
-   ls, err = net.Listen("tcp", resp.CRLListenAddress)
+   ls, err = net.Listen("tcp", cfg.CRLListenAddress())
    if err != nil {
       Goose.Logf(1,"Failed creating listener: %s", err)
       return nil, err
@@ -314,6 +350,9 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       Goose.Logf(1,"Failed creating stoppable listener: %s", err)
       return nil, err
    }
+
+/*
+   resp.CAServer = resp.Config.CACRL()
 
    resp.PageNotFound, err = ioutil.ReadFile(resp.PageNotFoundPath)
    if err != nil {
@@ -337,7 +376,6 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       Goose.Logf(1,"Failed reading rootCA.crl file: %s", err)
       return nil, err
    }
-
 
 //   err = resp.readEcdsaKey(&resp.Auth.CAKeyPem,       &resp.Auth.CAKey,      "rootCA.key")
 //   if err != nil {
@@ -386,6 +424,7 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
      return nil
    })
 
+*/
    return resp, err
 }
 
@@ -617,10 +656,14 @@ func New(svcs ...EndPointHandler) (*Service, error) {
          Goose.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
       }
 
+      // The first endpoint handler MUST have a config defined, otherwise we'll ignore endpoint handlers until we find one which provides a configuration
       if resp == nil {
          resp, err = initSvc(svcElem)
          if err != nil {
             return nil, err
+         }
+         if resp == nil {
+            continue // IF we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
          }
       }
 
@@ -686,9 +729,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
          }
 
 
-         hostport := strings.Split(resp.ListenAddress,":")
+         hostport := strings.Split(resp.Config.ListenAddress(),":")
          if hostport[0] == "" {
-            hostport[0] = resp.Auth.ServerCert.DNSNames[0]
+            hostport[0] = resp.Config.CertKit().ServerCert.DNSNames[0]
          }
 
          resp.Swagger = &SwaggerT{
@@ -978,7 +1021,7 @@ func (svc *Service) ListenAndServeTLS() error {
    var crypls net.Listener
    var hn                   string
 
-   if svc.ListenAddress[0] == ':' {
+   if svc.Config.ListenAddress()[0] == ':' {
       hn, err = os.Hostname()
       if err!=nil {
          Goose.Logf(1,"Error checking hostname: %s", err)
@@ -996,7 +1039,7 @@ func (svc *Service) ListenAndServeTLS() error {
    Goose.Logf(6,"auth: %#v",aType)
 
    srv := &http.Server{
-      Addr: hn + svc.ListenAddress,
+      Addr: hn + svc.Config.ListenAddress(),
       Handler: svc,
 
       TLSConfig: &tls.Config{
@@ -1007,25 +1050,29 @@ func (svc *Service) ListenAndServeTLS() error {
       },
    }
 
+/*
    srv.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(svc.PemPath + "/server.crt", svc.PemPath + "/server.key")
    if err != nil {
       Goose.Logf(1,"Failed reading server certificates: %s",err)
       return err
    }
+*/
 
+   srv.TLSConfig.Certificates[0] = svc.Config.CertKit().ServerX509KeyPair
+   Goose.Logf(5,"X509KeyPair used: %#v",srv.TLSConfig.Certificates[0])
    srv.TLSConfig.BuildNameToCertificate()
 
    crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
 
    srvcrl := &http.Server{
-      Addr: hn + svc.CRLListenAddress,
-      Handler: svc.Auth,
+      Addr: hn + svc.Config.CRLListenAddress(),
+      Handler: svc.Config.CertKit(),
    }
 
    wg.Add(2)
 
    go func() {
-      Goose.Logf(5,"CRL Listen Address: %s",svc.CRLListenAddress)
+      Goose.Logf(5,"CRL Listen Address: %s",svc.Config.CRLListenAddress())
       defer wg.Done()
       err = srvcrl.Serve(svc.CRLListener)
 
@@ -1051,17 +1098,6 @@ func (svc *Service) ListenAndServeTLS() error {
    return err
 }
 
-
-func (casvc ServerCert) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-   if r.URL.Path == "/rootCA.crl" {
-      w.WriteHeader(http.StatusOK)
-      w.Header().Set("Content-Type", "application/pkix-crl")
-      w.Write(casvc.CACRL)
-      return
-   }
-
-   w.WriteHeader(http.StatusNotFound)
-}
 
 func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var match              [][]string
@@ -1096,7 +1132,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
 
       fmt.Sscanf(CertIdStr[1],"%d",&CertId)
-      if UserCert, ok = svc.UserCerts[CertId]; ok {
+      if UserCert, ok = svc.Config.CertKit().UserCerts[CertId]; ok {
          if bytes.Equal(UserCert.Raw,cert.Raw) {
             found = true
             break
@@ -1116,7 +1152,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    if !found {
       Goose.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
       w.WriteHeader(http.StatusNotFound)
-      w.Write(svc.PageNotFound)
+      w.Write(svc.Config.PageNotFound())
       return
    }
 

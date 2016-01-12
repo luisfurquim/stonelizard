@@ -1,4 +1,4 @@
-package stonelizard
+package certkit
 
 import (
    "os"
@@ -16,28 +16,28 @@ import (
 )
 
 
-func NewServer(srvsubject, casubject pkix.Name, host, email string) (*ServerCert, error) {
-   var srv ServerCert
-   var e    error
 
-   srv = ServerCert{}
+func New(srvsubject, casubject pkix.Name, host, email string) (*CertKit, error) {
+   var crtkit CertKit
+   var e      error
 
-   e = srv.GenerateCA(casubject, host, email)
+   crtkit = CertKit{}
+
+   e = crtkit.GenerateCA(casubject, host, email)
    if  e != nil {
       return nil, e
    }
 
-   e = srv.GenerateServer(srvsubject, host, email)
+   e = crtkit.GenerateServer(srvsubject, host, email)
    if  e != nil {
       return nil, e
    }
 
-   return &srv, nil
+   return &crtkit, nil
 }
 
 
-
-func (srv *ServerCert) GenerateServer(subject pkix.Name, host, email string) error {
+func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) error {
    var e          error
    var derBytes []byte
 
@@ -63,25 +63,25 @@ func (srv *ServerCert) GenerateServer(subject pkix.Name, host, email string) err
       NotBefore:             notBefore,
       NotAfter:              notBefore.Add(365*24*time.Hour),
       DNSNames:              []string{host, strings.Split(host,".")[0]},
-      AuthorityKeyId:        srv.CACert.SubjectKeyId,
+      AuthorityKeyId:        crtkit.CACert.SubjectKeyId,
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
       BasicConstraintsValid: true,
    }
 
-   srv.ServerKey               = priv
-   srv.ServerCert              = &template
-   derBytes, e                 = x509.CreateCertificate(rand.Reader, &template, srv.CACert, &priv.PublicKey, srv.CAKey)
+   crtkit.ServerKey        = priv
+   crtkit.ServerCert       = &template
+   derBytes, e             = x509.CreateCertificate(rand.Reader, &template, crtkit.CACert, &priv.PublicKey, crtkit.CAKey)
    if e != nil {
       return errors.New(fmt.Sprintf("Failed to create certificate: %s", e))
    }
-   srv.ServerCertPem           = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-   srv.ServerKeyPem            = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+   crtkit.ServerCertPem    = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+   crtkit.ServerKeyPem     = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
    return nil
 }
 
-func (srv *ServerCert) GenerateCA(subject pkix.Name, host, email string) error {
+func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string) error {
    var e          error
    var derBytes []byte
 //   var ecBytes  []byte
@@ -119,25 +119,25 @@ func (srv *ServerCert) GenerateCA(subject pkix.Name, host, email string) error {
       BasicConstraintsValid: true,
    }
 
-   srv.CAKey                   = priv
-   srv.CACert                  = &template
+   crtkit.CAKey                = priv
+   crtkit.CACert               = &template
    derBytes, e                 = x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
    if e != nil {
       return errors.New(fmt.Sprintf("Failed to create certificate: %s", e))
    }
-   srv.CACertPem               = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+   crtkit.CACertPem            = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 //   ecBytes, e                  = x509.MarshalECPrivateKey(priv)
 //   if err != nil {
 //      return errors.New(fmt.Sprintf("Failed to Marshal ECDSA Private Key: %s", e))
 //   }
-//   srv.CAKeyPem                = pem.EncodeToMemory(&pem.Block{Type: "ECDSA PRIVATE KEY", Bytes: ecBytes})
-   srv.CAKeyPem                = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+//   crtkit.CAKeyPem             = pem.EncodeToMemory(&pem.Block{Type: "ECDSA PRIVATE KEY", Bytes: ecBytes})
+   crtkit.CAKeyPem             = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 
    derBytes, e = template.CreateCRL(rand.Reader, priv, []pkix.RevokedCertificate{}, time.Now(), time.Now().Add(time.Hour*24*30))
    if e != nil {
       return errors.New(fmt.Sprintf("Failed to create CRL: %s", e))
    }
-   srv.CACRL                   = derBytes
+   crtkit.CACRL                = derBytes
 
    return nil
 }
@@ -145,7 +145,7 @@ func (srv *ServerCert) GenerateCA(subject pkix.Name, host, email string) error {
 
 
 
-func (srv *ServerCert) GenerateClient(subject pkix.Name, email, password string) ([]byte,[]byte,error) {
+func (crtkit *CertKit) GenerateClient(subject pkix.Name, email, password string) ([]byte,[]byte,error) {
    priv, err := rsa.GenerateKey(rand.Reader, 2048)
    if err != nil {
       return nil, nil, errors.New(fmt.Sprintf("failed to generate private key: %s", err))
@@ -169,7 +169,7 @@ func (srv *ServerCert) GenerateClient(subject pkix.Name, email, password string)
    }
 
 
-   derBytes, err := x509.CreateCertificate(rand.Reader, &template, srv.CACert, &priv.PublicKey, srv.CAKey)
+   derBytes, err := x509.CreateCertificate(rand.Reader, &template, crtkit.CACert, &priv.PublicKey, crtkit.CAKey)
    if err != nil {
       return nil, nil, errors.New(fmt.Sprintf("Failed to create certificate: %s", err))
    }
