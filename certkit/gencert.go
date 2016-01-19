@@ -56,6 +56,8 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
       host, _ = os.Hostname()
    }
 
+   Goose.Logf(4,"Certificate authority used: %#v", crtkit.CACert)
+
    template := x509.Certificate{
       SerialNumber:          serialNumber,
       Subject:               subject,
@@ -67,6 +69,12 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
       BasicConstraintsValid: true,
+   }
+
+   if crtkit.CACert.CRLDistributionPoints != nil {
+      template.CRLDistributionPoints = crtkit.CACert.CRLDistributionPoints
+   } else {
+      Goose.Logf(1,"Certificate authority without CRL distribution points")
    }
 
    crtkit.ServerKey        = priv
@@ -81,9 +89,10 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
    return nil
 }
 
-func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string) error {
+func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenport ...string) error {
    var e          error
    var derBytes []byte
+   var crlurl     string
 //   var ecBytes  []byte
 
 //   priv, err := ecdsa.GenerateKey(elliptic.P521(),rand.Reader)
@@ -102,6 +111,12 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string) error {
       host, _ = os.Hostname()
    }
 
+   if len(listenport) == 0 {
+      crlurl = "http://" + host + "/rootCA.crl"
+   } else {
+      crlurl = "http://" + host + ":" + listenport[0] + "/rootCA.crl"
+   }
+
    template := x509.Certificate{
       SerialNumber:          serialNumber,
       Subject:               subject,
@@ -113,7 +128,7 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string) error {
       NotAfter:              notBefore.Add(365*20*24*time.Hour),
       DNSNames:              []string{host, strings.Split(host,".")[0]},
       PolicyIdentifiers:     []asn1.ObjectIdentifier{[]int{2, 16, 76, 1, 1, 0}}, // Policy: 2.16.76.1.1.0 CPS: http://acraiz.icpbrasil.gov.br/DPCacraiz.pdf
-      CRLDistributionPoints: []string{"http://" + host + "/rootCA.crl"},
+      CRLDistributionPoints: []string{crlurl},
 
       KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
       BasicConstraintsValid: true,
