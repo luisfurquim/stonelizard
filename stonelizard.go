@@ -1104,8 +1104,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var endpoint               UrlNode
    var resp                   Response
    var cert, UserCert        *x509.Certificate
-   var CertIdStr            []string
-   var CertId                 int
    var found                  bool
    var  ok              bool
 //   var ok              bool
@@ -1126,13 +1124,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    found = false
    for _, cert = range r.TLS.PeerCertificates {
       Goose.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
-      CertIdStr = strings.Split(cert.Subject.CommonName,":")
-      if len(CertIdStr) != 2 {
-         continue
-      }
-
-      fmt.Sscanf(CertIdStr[1],"%d",&CertId)
-      if UserCert, ok = svc.Config.CertKit().UserCerts[CertId]; ok {
+      if UserCert, ok = svc.Config.CertKit().UserCerts[cert.Subject.CommonName]; ok {
          if bytes.Equal(UserCert.Raw,cert.Raw) {
             found = true
             break

@@ -30,7 +30,7 @@ type CertKit struct {
    ServerKey,     CAKey      *rsa.PrivateKey
    CACRL                    []byte
    CertPool                  *x509.CertPool
-   UserCerts         map[int]*x509.Certificate
+   UserCerts      map[string]*x509.Certificate
    ServerX509KeyPair          tls.Certificate
 }
 

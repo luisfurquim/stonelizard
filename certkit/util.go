@@ -4,7 +4,6 @@ package certkit
 import (
    "os"
    "fmt"
-   "strings"
    "net/http"
    "io/ioutil"
    "crypto/rsa"
@@ -194,8 +193,6 @@ func Load(path, ServerCert, CACert, ServerKey, CAKey string) (*CertKit, error) {
 
    err = filepath.Walk(fmt.Sprintf("%s%c%s",path, os.PathSeparator,"client"), func (path string, f os.FileInfo, err error) error {
       var ClientCert *x509.Certificate
-      var CertIdStr []string
-      var CertId      int
 
       if (len(path)<4) || (path[len(path)-4:]!=".crt") {
          return nil
@@ -207,17 +204,10 @@ func Load(path, ServerCert, CACert, ServerKey, CAKey string) (*CertKit, error) {
          return err
       }
 
-      CertIdStr = strings.Split(ClientCert.Subject.CommonName,":")
-      if len(CertIdStr) > 2 {
-         Goose.Logf(1,"Failed extracting %s subject name",ClientCert.Subject.CommonName)
-         return err
-      }
-
-      fmt.Sscanf(CertIdStr[len(CertIdStr)-1],"%d",&CertId)
       if ck.UserCerts == nil {
-         ck.UserCerts = map[int]*x509.Certificate{CertId:ClientCert}
+         ck.UserCerts = map[string]*x509.Certificate{ClientCert.Subject.CommonName:ClientCert}
       } else {
-         ck.UserCerts[CertId] = ClientCert
+         ck.UserCerts[ClientCert.Subject.CommonName] = ClientCert
       }
 
      return nil
