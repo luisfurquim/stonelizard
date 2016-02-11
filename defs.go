@@ -48,7 +48,6 @@ type UrlNode struct {
    produces  string
    consumes  string
    allowGzip bool
-   Matcher  *regexp.Regexp
    Headers []string
    Query   []string
    Handle    func ([]string, Unmarshaler) Response
@@ -65,7 +64,16 @@ type Shaper interface {
    CertKit()           *certkit.CertKit
 }
 
+/*
+type OperationIndex struct{
+   Index          int
+   PathParamLen   int
+}
+*/
+
 type Service struct {
+   Matcher           *regexp.Regexp
+   MatchedOps map[int]int
    Svc              []UrlNode
    Config             Shaper
    AuthRequired       bool

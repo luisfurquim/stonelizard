@@ -302,6 +302,7 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 
    resp = &Service{
       AuthRequired: false,
+      MatchedOps: map[int]int{},
    }
 
    cfg, err = svcElem.GetConfig()
@@ -628,6 +629,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var tk                   string
    var ok                   bool
    var re                   string
+   var reAllOps             string
+   var reComp              *regexp.Regexp
    var c                    rune
    var err                  error
    var stmp                 string
@@ -644,6 +647,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var description         *string
    var headers            []string
    var query              []string
+   var optIndex  map[string]int
+   var HdrNew, HdrOld       string
+   var MatchedOpsIndex      int
 
    for _, svc = range svcs {
       Goose.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -663,7 +669,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             return nil, err
          }
          if resp == nil {
-            continue // IF we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
+            continue // If we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
          }
       }
 
@@ -683,7 +689,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   svcConsumes = typ.Field(i).Tag.Get("consumes")
                   svcProduces = typ.Field(i).Tag.Get("produces")
                   allowGzip   = typ.Field(i).Tag.Get("allowGzip")
-                  enableCORS  = typ.Field(i).Tag.Get("EnableCORS")
+                  enableCORS  = typ.Field(i).Tag.Get("enableCORS")
                   globalDataCount++
                }
             }
@@ -996,19 +1002,61 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
 
+            resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+            reComp                           = regexp.MustCompile(re)
+            MatchedOpsIndex                 += reComp.NumSubexp() + 1
+
             resp.Svc = append(resp.Svc,UrlNode{
                Path: path,
-               Matcher: regexp.MustCompile(re),
                consumes: consumes,
                produces: produces,
                Headers: headers,
                Query: query,
                Handle: buildHandle(svcRecv,method,pt),
             })
+
+            reAllOps += "|(" + re + ")"
+            Goose.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
+
+            if resp.EnableCORS {
+               index := len(resp.Svc)
+               if optIndex == nil {
+                  optIndex = map[string]int{path:index}
+               } else if index, ok = optIndex[path]; ok {
+                  for _, HdrNew = range headers {
+                     for _, HdrOld = range resp.Svc[index].Headers {
+                        if HdrOld == HdrNew {
+                           break
+                        }
+                     }
+                     if HdrOld != HdrNew {
+                        resp.Svc[index].Headers = append(resp.Svc[index].Headers, HdrNew)
+                     }
+                  }
+                  continue
+               } else {
+                  optIndex[path] = len(resp.Svc)
+               }
+
+               re = "^OPTIONS" + re[len(httpmethod)+1:]
+               resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+               reComp                           = regexp.MustCompile(re)
+               MatchedOpsIndex                 += reComp.NumSubexp() + 1
+
+               resp.Svc = append(resp.Svc,UrlNode{
+                  Path: path,
+                  Headers: headers,
+               })
+               reAllOps += "|(" + re + ")"
+               Goose.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
+            }
          }
       }
    }
 
+   Goose.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
+   Goose.Logf(6,"Operations %#v\n",resp.Svc)
+   resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
    return resp, nil
 }
 
@@ -1100,7 +1148,9 @@ func (svc *Service) ListenAndServeTLS() error {
 
 
 func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-   var match              [][]string
+   var match                []string
+   var parms                []string
+   var i, j                   int
    var endpoint               UrlNode
    var resp                   Response
    var cert, UserCert        *x509.Certificate
@@ -1155,23 +1205,12 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    hd.Add("Access-Control-Allow-Origin","*")
    hd.Add("Vary","Origin")
 
-   if r.Method == "OPTIONS" {
-      hd.Add("Access-Control-Allow-Methods","POST, GET, OPTIONS, PUT, DELETE")
-      hd.Add("Access-Control-Allow-Headers", "*")
-//Access-Control-Allow-Origin: http://foo.example
-//Access-Control-Allow-Methods: POST, GET, OPTIONS
-//Access-Control-Allow-Headers: X-PINGOTHER
-//Access-Control-Allow-Origin: *
-   }
-
    Goose.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
       defer func() {
-         Goose.Logf(5,"Testing the need to recover...")
          if r := recover(); r != nil {
             Goose.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
          }
-         Goose.Logf(5,"Tested the need to recover!!!")
       }()
       hd.Add("Content-Type","application/json")
 //      w.WriteHeader(http.StatusOK)
@@ -1190,19 +1229,41 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   for _, endpoint = range svc.Svc {
-      Goose.Logf(5,"trying %s with endpoint: %s",r.Method+":"+r.URL.Path,endpoint.Path)
-      match = endpoint.Matcher.FindAllStringSubmatch(r.Method+":"+r.URL.Path,-1)
-      if len(match) > 0 {
-         Goose.Logf(5,"Found endpoint %s for: %s",endpoint.Path,r.URL.Path)
-         break
-      }
-   }
-
+   match = svc.Matcher.FindStringSubmatch(r.Method+":"+r.URL.Path)
+   Goose.Logf(6,"Matcher found this %#v\n", match)
    if len(match) == 0 {
       Goose.Logf(1,"Invalid service handler " + r.URL.Path)
       w.WriteHeader(http.StatusBadRequest)
       w.Write([]byte("Invalid service handler " + r.URL.Path))
+      return
+   }
+
+
+//   for _, endpoint = range svc.Svc {
+   for i=1; i<len(match); i++ {
+      Goose.Logf(5,"trying %s:%s with endpoint: %s",r.Method,r.URL.Path,svc.Svc[svc.MatchedOps[i-1]].Path)
+      if len(match[i]) > 0 {
+         Goose.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,r.URL.Path)
+         endpoint = svc.Svc[svc.MatchedOps[i-1]]
+         parms = []string{}
+         for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {}
+         parms = match[i+1:j]
+         break
+      }
+   }
+
+   Goose.Logf(5,"Original parms: %#v",parms)
+
+   if r.Method == "OPTIONS" {
+      Goose.Logf(4,"CORS Options called on " + r.URL.Path)
+      hd.Add("Access-Control-Allow-Methods","POST, GET, OPTIONS, PUT, DELETE")
+//Access-Control-Allow-Origin: http://foo.example
+//Access-Control-Allow-Methods: POST, GET, OPTIONS
+//Access-Control-Allow-Headers: X-PINGOTHER
+//Access-Control-Allow-Origin: *
+      hd.Add("Access-Control-Allow-Headers", strings.Join(endpoint.Headers,", "))
+      w.WriteHeader(http.StatusOK)
+      w.Write([]byte("OK"))
       return
    }
 
@@ -1213,9 +1274,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             Goose.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
             return
          }
-         match[0] = append(match[0],r.Form[qry][0]) // TODO array support
+         parms = append(parms,r.Form[qry][0]) // TODO array support
       }
    }
+
+   Goose.Logf(5,"Parms with query: %#v",parms)
 
    for _, header = range endpoint.Headers {
       if (r.Header[header]==nil) || (len(r.Header[header])==0) {
@@ -1223,8 +1286,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          Goose.Logf(6,"HTTP Headers found: %#v",r.Header)
          return
       }
-      match[0] = append(match[0],r.Header[header][0]) // TODO array support
+      parms = append(parms,r.Header[header][0]) // TODO array support
    }
+
+   Goose.Logf(5,"Parms with headers: %#v",parms)
 
    Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
 
@@ -1236,7 +1301,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    Goose.Logf(6,"umrsh=%#v",umrsh)
 
-   resp = endpoint.Handle(match[0][1:],umrsh)
+   resp = endpoint.Handle(parms,umrsh)
 
    outWriter = w
 
