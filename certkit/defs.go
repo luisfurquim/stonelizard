@@ -34,6 +34,10 @@ type CertKit struct {
    ServerX509KeyPair          tls.Certificate
 }
 
-var Goose goose.Alert
 
 var ErrorCertsMustHaveKeys = errors.New("Either provide both certificate and key or none of them")
+
+var Goose struct {
+   Generator goose.Alert
+   Loader    goose.Alert
+}

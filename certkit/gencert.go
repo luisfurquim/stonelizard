@@ -56,7 +56,7 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
       host, _ = os.Hostname()
    }
 
-   Goose.Logf(4,"Certificate authority used: %#v", crtkit.CACert)
+   Goose.Generator.Logf(6,"Certificate authority used: %#v", crtkit.CACert)
 
    template := x509.Certificate{
       SerialNumber:          serialNumber,
@@ -71,10 +71,12 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
       BasicConstraintsValid: true,
    }
 
+   Goose.Generator.Logf(4,"X509 Template: %#v", template)
+
    if crtkit.CACert.CRLDistributionPoints != nil {
       template.CRLDistributionPoints = crtkit.CACert.CRLDistributionPoints
    } else {
-      Goose.Logf(1,"Certificate authority without CRL distribution points")
+      Goose.Generator.Logf(1,"Certificate authority without CRL distribution points")
    }
 
    crtkit.ServerKey        = priv
@@ -83,8 +85,10 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) err
    if e != nil {
       return errors.New(fmt.Sprintf("Failed to create certificate: %s", e))
    }
+   Goose.Generator.Logf(4,"DER Certificate: %s", derBytes)
    crtkit.ServerCertPem    = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
    crtkit.ServerKeyPem     = pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+   Goose.Generator.Logf(4,"PEM Certificate: %s", crtkit.ServerCertPem)
 
    return nil
 }

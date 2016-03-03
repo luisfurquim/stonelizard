@@ -20,14 +20,14 @@ func (crtkit CertKit) ReadCert(pembuf *[]byte, cert **x509.Certificate, path str
 
    *pembuf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading Cert %s",err)
+      Goose.Loader.Logf(1,"Failed reading Cert %s",err)
       return err
    }
 
    block, _  := pem.Decode(*pembuf)
    *cert, err  = x509.ParseCertificate(block.Bytes)
    if err != nil {
-      Goose.Logf(1,"Failed decoding Cert %s",err)
+      Goose.Loader.Logf(1,"Failed decoding Cert %s",err)
       return err
    }
 
@@ -41,14 +41,14 @@ func (crtkit CertKit) ReadCertificate(cert **x509.Certificate, path string) erro
 
    pembuf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading Cert %s",err)
+      Goose.Loader.Logf(1,"Failed reading Cert %s",err)
       return err
    }
 
    block, _  := pem.Decode(pembuf)
    *cert, err  = x509.ParseCertificate(block.Bytes)
    if err != nil {
-      Goose.Logf(1,"Failed decoding Cert %s",err)
+      Goose.Loader.Logf(1,"Failed decoding Cert %s",err)
       return err
    }
 
@@ -61,7 +61,7 @@ func (crtkit CertKit) ReadCRL(buf *[]byte, path string) error {
 
    *buf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading CRL %s",err)
+      Goose.Loader.Logf(1,"Failed reading CRL %s",err)
       return err
    }
 
@@ -73,14 +73,14 @@ func (crtkit CertKit) ReadEcdsaKey(pembuf *[]byte, key **ecdsa.PrivateKey, path 
 
    *pembuf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading Key %s",err)
+      Goose.Loader.Logf(1,"Failed reading Key %s",err)
       return err
    }
 
    block, _  := pem.Decode(*pembuf)
    *key, err  = x509.ParseECPrivateKey(block.Bytes)
    if err != nil {
-      Goose.Logf(1,"Failed decoding key %s",err)
+      Goose.Loader.Logf(1,"Failed decoding key %s",err)
       return err
    }
 
@@ -92,14 +92,14 @@ func (crtkit CertKit) ReadRsaKey(pembuf *[]byte, key **rsa.PrivateKey, path stri
 
    *pembuf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading Key %s",err)
+      Goose.Loader.Logf(1,"Failed reading Key %s",err)
       return err
    }
 
    block, _  := pem.Decode(*pembuf)
    *key, err  = x509.ParsePKCS1PrivateKey(block.Bytes)
    if err != nil {
-      Goose.Logf(1,"Failed decoding key %s",err)
+      Goose.Loader.Logf(1,"Failed decoding key %s",err)
       return err
    }
 
@@ -112,14 +112,14 @@ func (crtkit CertKit) ReadRsaPrivKey(key **rsa.PrivateKey, path string) error {
 
    pembuf, err = ioutil.ReadFile(path)
    if err != nil {
-      Goose.Logf(1,"Failed reading Key %s",err)
+      Goose.Loader.Logf(1,"Failed reading Key %s",err)
       return err
    }
 
    block, _  := pem.Decode(pembuf)
    *key, err  = x509.ParsePKCS1PrivateKey(block.Bytes)
    if err != nil {
-      Goose.Logf(1,"Failed decoding key %s",err)
+      Goose.Loader.Logf(1,"Failed decoding key %s",err)
       return err
    }
 
@@ -145,48 +145,48 @@ func Load(path, ServerCert, CACert, ServerKey, CAKey string) (*CertKit, error) {
 
    if !((ServerCert=="") && (ServerKey=="")) {
       if (ServerCert=="") || (ServerKey=="") {
-         Goose.Logf(1,"Error loading server certificate/key pair: %s",ErrorCertsMustHaveKeys)
+         Goose.Loader.Logf(1,"Error loading server certificate/key pair: %s",ErrorCertsMustHaveKeys)
          return nil, ErrorCertsMustHaveKeys
       }
 
       certpath := fmt.Sprintf("%s%c%s",path, os.PathSeparator,ServerCert)
       err = ck.ReadCertificate(&ck.ServerCert, certpath)
       if err != nil {
-         Goose.Logf(1,"Error loading server certificate: %s",err)
+         Goose.Loader.Logf(1,"Error loading server certificate: %s",err)
          return nil, err
       }
 
       keypath := fmt.Sprintf("%s%c%s",path, os.PathSeparator,ServerKey)
       err = ck.ReadRsaPrivKey(&ck.ServerKey, keypath)
       if err != nil {
-         Goose.Logf(1,"Error loading server private key: %s",err)
+         Goose.Loader.Logf(1,"Error loading server private key: %s",err)
          return nil, err
       }
 
       ck.ServerX509KeyPair, err = tls.LoadX509KeyPair(certpath, keypath)
       if err != nil {
-         Goose.Logf(1,"Failed reading server certificate/key pair: %s",err)
+         Goose.Loader.Logf(1,"Failed reading server certificate/key pair: %s",err)
          return nil, err
       }
    }
 
    if !((CACert=="") && (CAKey=="")) {
       if (CACert=="") || (CAKey=="") {
-         Goose.Logf(1,"Error loading CA certificate/key pair: %s",ErrorCertsMustHaveKeys)
+         Goose.Loader.Logf(1,"Error loading CA certificate/key pair: %s",ErrorCertsMustHaveKeys)
          return nil, ErrorCertsMustHaveKeys
       }
 
       certpath := fmt.Sprintf("%s%c%s",path, os.PathSeparator,CACert)
       err = ck.ReadCertificate(&ck.CACert, certpath)
       if err != nil {
-         Goose.Logf(1,"Error loading CA certificate: %s",err)
+         Goose.Loader.Logf(1,"Error loading CA certificate: %s",err)
          return nil, err
       }
 
       keypath := fmt.Sprintf("%s%c%s",path, os.PathSeparator,CAKey)
       err = ck.ReadRsaPrivKey(&ck.CAKey, keypath)
       if err != nil {
-         Goose.Logf(1,"Error loading CA private key: %s",err)
+         Goose.Loader.Logf(1,"Error loading CA private key: %s",err)
          return nil, err
       }
    }
@@ -200,7 +200,7 @@ func Load(path, ServerCert, CACert, ServerKey, CAKey string) (*CertKit, error) {
 
       err = ck.ReadCertificate(&ClientCert, path)
       if err != nil {
-         Goose.Logf(1,"Failed reading %s file: %s", path, err)
+         Goose.Loader.Logf(1,"Failed reading %s file: %s", path, err)
          return err
       }
 

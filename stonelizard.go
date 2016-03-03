@@ -73,7 +73,7 @@ func NewListener(l net.Listener) (*StoppableListener, error) {
 func (sl *StoppableListener) Accept() (net.Conn, error) {
 
    for {
-      Goose.Logf(6,"Start accept loop")
+      Goose.Listener.Logf(6,"Start accept loop")
 
       //Wait up to one second for a new connection
       sl.SetDeadline(time.Now().Add(5*time.Second))
@@ -83,31 +83,31 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
       //Check for the channel being closed
       select {
          case <-sl.stop:
-            Goose.Logf(2,"Received stop request")
+            Goose.Listener.Logf(2,"Received stop request")
             return nil, ErrorStopped
          default:
-            Goose.Logf(6,"channel still open")
+            Goose.Listener.Logf(6,"channel still open")
             // If the channel is still open, continue as normal
       }
 
       if err != nil {
-         Goose.Logf(6,"Err not nil: %s",err)
+         Goose.Listener.Logf(6,"Err not nil: %s",err)
          netErr, ok := err.(net.Error)
 
          // If this is a timeout, then continue to wait for
          // new connections
          if ok && netErr.Timeout() && netErr.Temporary() {
-            Goose.Logf(6,"continue")
+            Goose.Listener.Logf(6,"continue")
             continue
          }
       }
 
       if err==nil {
-         Goose.Logf(2,"done listening")
+         Goose.Listener.Logf(2,"done listening")
          return newConn, nil
       }
 
-      Goose.Logf(2,"done listening, err=%s",err)
+      Goose.Listener.Logf(2,"done listening, err=%s",err)
       return nil, err
    }
 }
@@ -135,7 +135,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var i              int
    var fieldType      string
 
-   Goose.Logf(6,"Tipo do parametro: %d: %s",parm.Kind(),parm)
+   Goose.Swagger.Logf(6,"Tipo do parametro: %d: %s",parm.Kind(),parm)
 
    if parm == voidType {
       return nil, nil
@@ -170,7 +170,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    }
 
    if parm.Kind()==reflect.String {
-      Goose.Logf(6,"Got string")
+      Goose.Swagger.Logf(6,"Got string")
       return &SwaggerParameterT{Schema: &SwaggerSchemaT{Type:"string"}}, nil
    }
 
@@ -240,10 +240,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 //            Description: description,
          },
       }
-      Goose.Logf(6,"Got struct: %#v",item)
+      Goose.Swagger.Logf(6,"Got struct: %#v",item)
       for i=0; i<parm.NumField(); i++ {
          field = parm.Field(i)
-         Goose.Logf(6,"Struct field: %s",field.Name)
+         Goose.Swagger.Logf(6,"Struct field: %s",field.Name)
          doc   = field.Tag.Get("doc")
          if doc != "" {
             description    = new(string)
@@ -272,7 +272,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
             Properties:       subItem.Schema.Properties,
          }
       }
-      Goose.Logf(6,"Got final struct: %#v",item)
+      Goose.Swagger.Logf(6,"Got final struct: %#v",item)
       return item, nil
    }
 
@@ -307,7 +307,7 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 
    cfg, err = svcElem.GetConfig()
    if err != nil {
-      Goose.Logf(1,"Failed opening config: %s", err)
+      Goose.Initialize.Logf(1,"Failed opening config: %s", err)
       return nil, err
    }
 
@@ -320,7 +320,7 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    err = json.NewDecoder(cfg).Decode(&resp)
 
    if (err!=nil) && (err!=io.EOF) {
-      Goose.Logf(1,"Failed parsing config file: %s", err)
+      Goose.Initialize.Logf(1,"Failed parsing config file: %s", err)
       return nil, err
    }
 */
@@ -329,26 +329,26 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 
    ls, err = net.Listen("tcp", cfg.ListenAddress())
    if err != nil {
-      Goose.Logf(1,"Failed creating listener: %s", err)
+      Goose.Initialize.Logf(1,"Failed creating listener: %s", err)
       return nil, err
    }
 
    resp.Listener, err = NewListener(ls)
    if err != nil {
-      Goose.Logf(1,"Failed creating stoppable listener: %s", err)
+      Goose.Initialize.Logf(1,"Failed creating stoppable listener: %s", err)
       return nil, err
    }
 
 
    ls, err = net.Listen("tcp", cfg.CRLListenAddress())
    if err != nil {
-      Goose.Logf(1,"Failed creating listener: %s", err)
+      Goose.Initialize.Logf(1,"Failed creating listener: %s", err)
       return nil, err
    }
 
    resp.CRLListener, err = NewListener(ls)
    if err != nil {
-      Goose.Logf(1,"Failed creating stoppable listener: %s", err)
+      Goose.Initialize.Logf(1,"Failed creating stoppable listener: %s", err)
       return nil, err
    }
 
@@ -357,41 +357,41 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 
    resp.PageNotFound, err = ioutil.ReadFile(resp.PageNotFoundPath)
    if err != nil {
-      Goose.Logf(1,"Failed reading %s file: %s", resp.PageNotFoundPath, err)
+      Goose.Initialize.Logf(1,"Failed reading %s file: %s", resp.PageNotFoundPath, err)
       return nil, err
    }
 
    err = resp.ReadCert(&resp.Auth.CACertPem,     &resp.Auth.CACert,     resp.PemPath + "/rootCA.crt")
    if err != nil {
-      Goose.Logf(1,"Failed reading rootCA.crt file: %s", err)
+      Goose.Initialize.Logf(1,"Failed reading rootCA.crt file: %s", err)
       return nil, err
    }
    err = resp.ReadCert(&resp.Auth.ServerCertPem, &resp.Auth.ServerCert, resp.PemPath + "/server.crt")
    if err != nil {
-      Goose.Logf(1,"Failed reading server.crt file: %s", err)
+      Goose.Initialize.Logf(1,"Failed reading server.crt file: %s", err)
       return nil, err
    }
 
    err = resp.ReadCRL(&resp.Auth.CACRL, "rootCA.crl")
    if err != nil {
-      Goose.Logf(1,"Failed reading rootCA.crl file: %s", err)
+      Goose.Initialize.Logf(1,"Failed reading rootCA.crl file: %s", err)
       return nil, err
    }
 
 //   err = resp.readEcdsaKey(&resp.Auth.CAKeyPem,       &resp.Auth.CAKey,      "rootCA.key")
 //   if err != nil {
-//      Goose.Logf(1,"Failed reading rootCA.key file: %s", err)
+//      Goose.Initialize.Logf(1,"Failed reading rootCA.key file: %s", err)
 //      return nil, err
 //   }
    err = resp.ReadRsaKey(&resp.Auth.CAKeyPem,   &resp.Auth.CAKey,  resp.PemPath + "/rootCA.key")
    if err != nil {
-      Goose.Logf(1,"Failed reading rootCA.key file: %s", err)
+      Goose.Initialize.Logf(1,"Failed reading rootCA.key file: %s", err)
       return nil, err
    }
 
    err = resp.ReadRsaKey(&resp.Auth.ServerKeyPem,   &resp.Auth.ServerKey,  resp.PemPath + "/server.key")
    if err != nil {
-      Goose.Logf(1,"Failed reading server.key file: %s", err)
+      Goose.Initialize.Logf(1,"Failed reading server.key file: %s", err)
       return nil, err
    }
 
@@ -405,13 +405,13 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
 
       err = resp.ReadCert(&ClientCertPem, &ClientCert, path)
       if err != nil {
-         Goose.Logf(1,"Failed reading %s file: %s", path, err)
+         Goose.Initialize.Logf(1,"Failed reading %s file: %s", path, err)
          return err
       }
 
       CertIdStr = strings.Split(ClientCert.Subject.CommonName,":")
       if len(CertIdStr) > 2 {
-         Goose.Logf(1,"Failed extracting %s subject name",ClientCert.Subject.CommonName)
+         Goose.Initialize.Logf(1,"Failed extracting %s subject name",ClientCert.Subject.CommonName)
          return err
       }
 
@@ -447,7 +447,7 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
 
       ins = []reflect.Value{this}
       for i, p = range parms {
-         Goose.Logf(5,"parm: %d:%s",i+1,p)
+         Goose.OpHandle.Logf(5,"parm: %d:%s",i+1,p)
          parmType = met.Type.In(i+1)
          parmTypeName = parmType.Name()
          if parmTypeName == "string" {
@@ -477,11 +477,11 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
             for _, keyval = range strings.Split(p,",") {
                arrKeyVal = strings.Split(keyval,":")
                if len(arrKeyVal) != 2 {
-                  Goose.Logf(1,"map parameter encoding error: %s",err)
+                  Goose.OpHandle.Logf(1,"map parameter encoding error: %s",err)
                   httpResp.Status = http.StatusInternalServerError
                   httpResp.Body   = "Internal server error"
                   httpResp.Header = map[string]string{}
-                  Goose.Logf(1,"Internal server error on map parameter encoding %s: %s",p,err)
+                  Goose.OpHandle.Logf(1,"Internal server error on map parameter encoding %s: %s",p,err)
                   return httpResp
                }
                if len(ptmp)>0 {
@@ -491,24 +491,24 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
             }
             p = "{" + ptmp + "}"
          }
-         Goose.Logf(5,"parmtype: %s",parmTypeName)
-         Goose.Logf(4,"parmcoding: %s",p)
+         Goose.OpHandle.Logf(5,"parmtype: %s",parmTypeName)
+         Goose.OpHandle.Logf(4,"parmcoding: %s",p)
          parm = reflect.New(parmType)
          err = json.Unmarshal([]byte(p),parm.Interface())
          if err != nil {
-            Goose.Logf(1,"unmarshal error: %s",err)
+            Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
             httpResp.Status = http.StatusInternalServerError
             httpResp.Body   = "Internal server error"
             httpResp.Header = map[string]string{}
-            Goose.Logf(1,"Internal server error parsing %s: %s",p,err)
+            Goose.OpHandle.Logf(1,"Internal server error parsing %s: %s",p,err)
             return httpResp
          }
          ins = append(ins,reflect.Indirect(parm))
-         Goose.Logf(5,"ins: %d:%s",len(ins),ins)
+         Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
       }
 
-//                  Goose.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
-      Goose.Logf(6,"posttype: %#v",posttype)
+//                  Goose.OpHandle.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
+      Goose.OpHandle.Logf(6,"posttype: %#v",posttype)
       if posttype != nil {
          postvalue = reflect.New(posttype)
          err = Unmarshal.Decode(postvalue.Interface())
@@ -516,12 +516,12 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
             httpResp.Status = http.StatusInternalServerError
             httpResp.Body   = "Internal server error"
             httpResp.Header = map[string]string{}
-            Goose.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Interface())
+            Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Interface())
             return httpResp
          }
-         Goose.Logf(6,"postvalue: %#v",postvalue)
+         Goose.OpHandle.Logf(6,"postvalue: %#v",postvalue)
          ins = append(ins,reflect.Indirect(postvalue))
-         Goose.Logf(5,"ins: %d:%s",len(ins),ins)
+         Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
       }
 
       return met.Func.Call(ins)[0].Interface().(Response)
@@ -543,7 +543,7 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
       for _, lstFld = range strings.Split(lstFlds,",") {
          parmcount++
          if (parmcount+1) > method.Type.NumIn() {
-            Goose.Logf(1,"%s (with query) at method %s", ErrorWrongParameterCount, methodName)
+            Goose.ParseFields.Logf(1,"%s (with query) at method %s", ErrorWrongParameterCount, methodName)
             err = ErrorWrongParameterCount
             return
          }
@@ -560,8 +560,8 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
 
 /*
          if SwaggerParameter.Schema.Required != nil {
-            Goose.Logf(1,"%s: %s",ErrorInvalidParameterType,lstFld)
-            Goose.Logf(1,"SwaggerParameter: %#v",SwaggerParameter)
+            Goose.ParseFields.Logf(1,"%s: %s",ErrorInvalidParameterType,lstFld)
+            Goose.ParseFields.Logf(1,"SwaggerParameter: %#v",SwaggerParameter)
             err = ErrorInvalidParameterType
             return
          }
@@ -599,7 +599,7 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
       }
    }
 
-   Goose.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
+   Goose.ParseFields.Logf(6,"parm: %s, count: %d, met.in:%d",methodName, parmcount,method.Type.NumIn()) // 3, 4
    return
 }
 
@@ -652,14 +652,14 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var MatchedOpsIndex      int
 
    for _, svc = range svcs {
-      Goose.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
+      Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
       if reflect.ValueOf(svc).Kind() == reflect.Ptr {
-         Goose.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
+         Goose.New.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
          svcElem = reflect.ValueOf(svc).Elem().Interface().(EndPointHandler)
-         Goose.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
+         Goose.New.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
       } else {
          svcElem = svc
-         Goose.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
+         Goose.New.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
       }
 
       // The first endpoint handler MUST have a config defined, otherwise we'll ignore endpoint handlers until we find one which provides a configuration
@@ -730,7 +730,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
          svcProduces = strings.Trim(svcProduces," ")
 
          if (svcRoot=="") || (svcConsumes=="") || (svcProduces=="") {
-            Goose.Logf(1,"Err: %s",ErrorNoRoot)
+            Goose.New.Logf(1,"Err: %s",ErrorNoRoot)
             return nil, ErrorNoRoot
          }
 
@@ -752,22 +752,22 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             Definitions: map[string]SwaggerSchemaT{},
          }
 
-         Goose.Logf(6,"enableCORS: [%s]",enableCORS)
+         Goose.New.Logf(6,"enableCORS: [%s]",enableCORS)
          if enableCORS != "" {
             resp.EnableCORS, err = strconv.ParseBool(enableCORS)
-            Goose.Logf(6,"resp.EnableCORS: %#v",resp.EnableCORS)
+            Goose.New.Logf(6,"resp.EnableCORS: %#v",resp.EnableCORS)
             if err != nil {
-               Goose.Logf(1,"Err: %s",ErrorServiceSyntax)
+               Goose.New.Logf(1,"Err: %s",ErrorServiceSyntax)
                return nil, ErrorServiceSyntax
             }
          }
 
-         Goose.Logf(6,"allowGzip: [%s]",allowGzip)
+         Goose.New.Logf(6,"allowGzip: [%s]",allowGzip)
          if allowGzip != "" {
             resp.AllowGzip, err = strconv.ParseBool(allowGzip)
-            Goose.Logf(6,"resp.AllowGzip: %#v",resp.AllowGzip)
+            Goose.New.Logf(6,"resp.AllowGzip: %#v",resp.AllowGzip)
             if err != nil {
-               Goose.Logf(1,"Err: %s",ErrorServiceSyntax)
+               Goose.New.Logf(1,"Err: %s",ErrorServiceSyntax)
                return nil, ErrorServiceSyntax
             }
          }
@@ -781,19 +781,19 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             svcRecv = reflect.ValueOf(svcElem)
             if method, ok = typ.MethodByName(methodName); !ok {
                if method, ok = typPtr.MethodByName(methodName); !ok {
-                  Goose.Logf(5,"|methods|=%d",typ.NumMethod())
-                  Goose.Logf(5,"type=%s.%s",typ.PkgPath(),typ.Name())
+                  Goose.New.Logf(5,"|methods|=%d",typ.NumMethod())
+                  Goose.New.Logf(5,"type=%s.%s",typ.PkgPath(),typ.Name())
                   for j=0; j<typ.NumMethod(); j++ {
                      mt := typ.Method(j)
-                     Goose.Logf(5,"%d: %s",j,mt.Name)
+                     Goose.New.Logf(5,"%d: %s",j,mt.Name)
                   }
 
-                  Goose.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
+                  Goose.New.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
                   return nil, errors.New(fmt.Sprintf("Method not found: %s",methodName))
                } else {
-                  Goose.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
+                  Goose.New.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
                   svcRecv = reflect.ValueOf(svc)
-                  Goose.Logf(5,"Pointer method found: %s",methodName)
+                  Goose.New.Logf(5,"Pointer method found: %s",methodName)
                }
             }
             path   = fld.Tag.Get("path")
@@ -824,7 +824,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      }
 
                      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                        Goose.Logf(1,"%s: %s",tk[1:len(tk)-1])
+                        Goose.New.Logf(1,"%s: %s",tk[1:len(tk)-1])
                         return nil, ErrorInvalidParameterType
                      }
 
@@ -869,7 +869,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             re += "{0,1}$"
 
-            Goose.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
+            Goose.New.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
 
             query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
             if err != nil {
@@ -914,7 +914,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                pt = nil
             }
 
-            Goose.Logf(5,"Registering: %s",re)
+            Goose.New.Logf(5,"Registering: %s",re)
             consumes = fld.Tag.Get("consumes")
             if consumes == "" {
                consumes = svcConsumes
@@ -966,7 +966,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   }
                   //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
                   //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                  Goose.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
+                  Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
                }
             } else {
                if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
@@ -1000,7 +1000,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Produces: []string{produces},
             }
 
-            Goose.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
+            Goose.New.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
 
             resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
             reComp                           = regexp.MustCompile(re)
@@ -1016,7 +1016,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             })
 
             reAllOps += "|(" + re + ")"
-            Goose.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
+            Goose.New.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
 
             if resp.EnableCORS {
                index := len(resp.Svc)
@@ -1048,14 +1048,14 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   Headers: headers,
                })
                reAllOps += "|(" + re + ")"
-               Goose.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
+               Goose.New.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
             }
          }
       }
    }
 
-   Goose.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
-   Goose.Logf(6,"Operations %#v\n",resp.Svc)
+   Goose.New.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
+   Goose.New.Logf(6,"Operations %#v\n",resp.Svc)
    resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
    return resp, nil
 }
@@ -1072,7 +1072,7 @@ func (svc *Service) ListenAndServeTLS() error {
    if svc.Config.ListenAddress()[0] == ':' {
       hn, err = os.Hostname()
       if err!=nil {
-         Goose.Logf(1,"Error checking hostname: %s", err)
+         Goose.InitServe.Logf(1,"Error checking hostname: %s", err)
          return err
       }
    }
@@ -1084,7 +1084,7 @@ func (svc *Service) ListenAndServeTLS() error {
       aType = tls.RequestClientCert
    }
 
-   Goose.Logf(6,"auth: %#v",aType)
+   Goose.InitServe.Logf(6,"auth: %#v",aType)
 
    srv := &http.Server{
       Addr: hn + svc.Config.ListenAddress(),
@@ -1101,13 +1101,13 @@ func (svc *Service) ListenAndServeTLS() error {
 /*
    srv.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(svc.PemPath + "/server.crt", svc.PemPath + "/server.key")
    if err != nil {
-      Goose.Logf(1,"Failed reading server certificates: %s",err)
+      Goose.InitServe.Logf(1,"Failed reading server certificates: %s",err)
       return err
    }
 */
 
    srv.TLSConfig.Certificates[0] = svc.Config.CertKit().ServerX509KeyPair
-   Goose.Logf(5,"X509KeyPair used: %#v",srv.TLSConfig.Certificates[0])
+   Goose.InitServe.Logf(5,"X509KeyPair used: %#v",srv.TLSConfig.Certificates[0])
    srv.TLSConfig.BuildNameToCertificate()
 
    crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
@@ -1120,28 +1120,28 @@ func (svc *Service) ListenAndServeTLS() error {
    wg.Add(2)
 
    go func() {
-      Goose.Logf(5,"CRL Listen Address: %s",svc.Config.CRLListenAddress())
+      Goose.InitServe.Logf(5,"CRL Listen Address: %s",svc.Config.CRLListenAddress())
       defer wg.Done()
       err = srvcrl.Serve(svc.CRLListener)
 
-//      Goose.Logf(5,"CRL Listen is serving")
+//      Goose.InitServe.Logf(5,"CRL Listen is serving")
 //      err = http.ListenAndServe(svc.CRLListenAddress,svc.Auth)
 //      if err != nil {
-//         Goose.Fatalf(1,"Error serving CRL: %s",err)
+//         Goose.InitServe.Fatalf(1,"Error serving CRL: %s",err)
 //      }
-      Goose.Logf(5,"CRL Listen ended listening")
+      Goose.InitServe.Logf(5,"CRL Listen ended listening")
    }()
 
 
    go func() {
       defer wg.Done()
       err = srv.Serve(crypls)
-      Goose.Logf(5,"Main Listen ended listening")
+      Goose.InitServe.Logf(5,"Main Listen ended listening")
    }()
 
    wg.Wait()
 
-   Goose.Logf(1,"Ending listening")
+   Goose.InitServe.Logf(1,"Ending listening")
 
    return err
 }
@@ -1170,10 +1170,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var buf                  []byte
 
 
-   Goose.Logf(5,"Peer certificates")
+   Goose.Serve.Logf(5,"Peer certificates")
    found = false
    for _, cert = range r.TLS.PeerCertificates {
-      Goose.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      Goose.Serve.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       if UserCert, ok = svc.Config.CertKit().UserCerts[cert.Subject.CommonName]; ok {
          if bytes.Equal(UserCert.Raw,cert.Raw) {
             found = true
@@ -1192,47 +1192,47 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 
    if !found {
-      Goose.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
+      Goose.Serve.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
       w.WriteHeader(http.StatusNotFound)
       w.Write(svc.Config.PageNotFound())
       return
    }
 
-   Goose.Logf(7,"TLS:%#v",r.TLS)
+   Goose.Serve.Logf(7,"TLS:%#v",r.TLS)
 
 
    hd := w.Header()
    hd.Add("Access-Control-Allow-Origin","*")
    hd.Add("Vary","Origin")
 
-   Goose.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
+   Goose.Serve.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
       defer func() {
          if r := recover(); r != nil {
-            Goose.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
+            Goose.Serve.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
          }
       }()
       hd.Add("Content-Type","application/json")
 //      w.WriteHeader(http.StatusOK)
-      Goose.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
+      Goose.Serve.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
 //      mrsh = json.NewEncoder(w)
 //      err = mrsh.Encode(svc.Swagger)
       buf, err = json.Marshal(svc.Swagger)
       if err!=nil {
-         Goose.Logf(1,"Internal server error marshaling swagger.json: %s",err)
+         Goose.Serve.Logf(1,"Internal server error marshaling swagger.json: %s",err)
       }
       hd.Add("Content-Length", fmt.Sprintf("%d",len(buf)))
       _, err = io.WriteString(w,string(buf))
       if err!=nil {
-         Goose.Logf(1,"Internal server error writing response body for swagger.json: %s",err)
+         Goose.Serve.Logf(1,"Internal server error writing response body for swagger.json: %s",err)
       }
       return
    }
 
    match = svc.Matcher.FindStringSubmatch(r.Method+":"+r.URL.Path)
-   Goose.Logf(6,"Matcher found this %#v\n", match)
+   Goose.Serve.Logf(6,"Matcher found this %#v\n", match)
    if len(match) == 0 {
-      Goose.Logf(1,"Invalid service handler " + r.URL.Path)
+      Goose.Serve.Logf(1,"Invalid service handler " + r.URL.Path)
       w.WriteHeader(http.StatusBadRequest)
       w.Write([]byte("Invalid service handler " + r.URL.Path))
       return
@@ -1241,9 +1241,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 //   for _, endpoint = range svc.Svc {
    for i=1; i<len(match); i++ {
-      Goose.Logf(5,"trying %s:%s with endpoint: %s",r.Method,r.URL.Path,svc.Svc[svc.MatchedOps[i-1]].Path)
+      Goose.Serve.Logf(5,"trying %s:%s with endpoint: %s",r.Method,r.URL.Path,svc.Svc[svc.MatchedOps[i-1]].Path)
       if len(match[i]) > 0 {
-         Goose.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,r.URL.Path)
+         Goose.Serve.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,r.URL.Path)
          endpoint = svc.Svc[svc.MatchedOps[i-1]]
          parms = []string{}
          for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {}
@@ -1252,10 +1252,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-   Goose.Logf(5,"Original parms: %#v",parms)
+   Goose.Serve.Logf(5,"Original parms: %#v",parms)
 
    if r.Method == "OPTIONS" {
-      Goose.Logf(4,"CORS Options called on " + r.URL.Path)
+      Goose.Serve.Logf(4,"CORS Options called on " + r.URL.Path)
       hd.Add("Access-Control-Allow-Methods","POST, GET, OPTIONS, PUT, DELETE")
 //Access-Control-Allow-Origin: http://foo.example
 //Access-Control-Allow-Methods: POST, GET, OPTIONS
@@ -1271,27 +1271,27 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       r.ParseForm()
       for _, qry = range endpoint.Query {
          if _, ok := r.Form[qry]; !ok {
-            Goose.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
+            Goose.Serve.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
             return
          }
          parms = append(parms,r.Form[qry][0]) // TODO array support
       }
    }
 
-   Goose.Logf(5,"Parms with query: %#v",parms)
+   Goose.Serve.Logf(5,"Parms with query: %#v",parms)
 
    for _, header = range endpoint.Headers {
       if (r.Header[header]==nil) || (len(r.Header[header])==0) {
-         Goose.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
-         Goose.Logf(6,"HTTP Headers found: %#v",r.Header)
+         Goose.Serve.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         Goose.Serve.Logf(6,"HTTP Headers found: %#v",r.Header)
          return
       }
       parms = append(parms,r.Header[header][0]) // TODO array support
    }
 
-   Goose.Logf(5,"Parms with headers: %#v",parms)
+   Goose.Serve.Logf(5,"Parms with headers: %#v",parms)
 
-   Goose.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
+   Goose.Serve.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
 
    if endpoint.consumes == "application/json" {
       umrsh = json.NewDecoder(r.Body)
@@ -1299,22 +1299,22 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       umrsh = xml.NewDecoder(r.Body)
    }
 
-   Goose.Logf(6,"umrsh=%#v",umrsh)
+   Goose.Serve.Logf(6,"umrsh=%#v",umrsh)
 
    resp = endpoint.Handle(parms,umrsh)
 
    outWriter = w
 
    if encRequest, ok = r.Header["Accept-Encoding"] ; ok {
-      Goose.Logf(6,"Accept-Encoding: %#v",encRequest)
+      Goose.Serve.Logf(6,"Accept-Encoding: %#v",encRequest)
       if svc.AllowGzip == true {
-         Goose.Logf(5,"svc.AllowGzip == true")
+         Goose.Serve.Logf(5,"svc.AllowGzip == true")
 gzipcheck:
          for _, enc = range encRequest {
             for _, e = range strings.Split(enc,", ") {
-               Goose.Logf(5,"Encoding: %s",e)
+               Goose.Serve.Logf(5,"Encoding: %s",e)
                if e == "gzip" {
-                  Goose.Logf(5,"Using gzip")
+                  Goose.Serve.Logf(5,"Using gzip")
                   gzw = gzip.NewWriter(w)
                   outWriter = gzHttpResponseWriter{
                      Writer: gzw,
@@ -1350,7 +1350,7 @@ gzipcheck:
    if resp.Status != http.StatusNoContent {
       err = mrsh.Encode(resp.Body)
       if err!=nil {
-         Goose.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
+         Goose.Serve.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
          return
       }
    }

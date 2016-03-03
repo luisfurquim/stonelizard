@@ -779,7 +779,6 @@ type SwaggerT struct {
 var voidType = reflect.TypeOf(Void{})
 var float64Type = reflect.TypeOf(float64(0))
 
-var Goose goose.Alert
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
 var ErrorInvalidNilParam = errors.New("Syntax error nil parameter not allowed in this context")
@@ -787,3 +786,17 @@ var ErrorWrongParameterCount = errors.New("Wrong parameter count")
 var ErrorInvalidParameterType = errors.New("Invalid parameter type")
 var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")
 var ErrorMissingRequiredQueryField = errors.New("Error missing required query field")
+
+
+var Goose struct {
+   Listener     goose.Alert
+   Swagger      goose.Alert
+   Initialize   goose.Alert
+   OpHandle     goose.Alert
+   ParseFields  goose.Alert
+   New          goose.Alert
+   InitServe    goose.Alert
+   Serve        goose.Alert
+}
+
+
