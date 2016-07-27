@@ -7,6 +7,7 @@ import (
    "regexp"
    "reflect"
    "net/http"
+   "mime/multipart"
    "github.com/luisfurquim/goose"
    "github.com/luisfurquim/stonelizard/certkit"
 )
@@ -24,6 +25,12 @@ type Unmarshaler interface {
 
 type Marshaler interface {
    Encode(v interface{}) error
+}
+
+type MultipartUnmarshaler struct {
+   form     *multipart.Form
+   fields  []string
+   index     int
 }
 
 type Response struct {
@@ -50,6 +57,7 @@ type UrlNode struct {
    allowGzip bool
    Headers []string
    Query   []string
+   Body    []string
    Handle    func ([]string, Unmarshaler) Response
 }
 
@@ -57,6 +65,7 @@ type EndPointHandler interface {
    GetConfig() (Shaper, error)
 }
 
+// Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
 type Shaper interface {
    PageNotFound()     []byte
    ListenAddress()      string
@@ -778,6 +787,8 @@ type SwaggerT struct {
 
 var voidType = reflect.TypeOf(Void{})
 var float64Type = reflect.TypeOf(float64(0))
+//var MaxUploadMemory int64 = 1024
+var MaxUploadMemory int64 = 16 * 1024 * 1024
 
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
@@ -786,6 +797,7 @@ var ErrorWrongParameterCount = errors.New("Wrong parameter count")
 var ErrorInvalidParameterType = errors.New("Invalid parameter type")
 var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")
 var ErrorMissingRequiredQueryField = errors.New("Error missing required query field")
+var ErrorMissingRequiredPostBodyField = errors.New("Error missing required post body field")
 
 
 var Goose struct {

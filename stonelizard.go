@@ -181,6 +181,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    if (parm.Kind()==reflect.Array) || (parm.Kind()==reflect.Slice) {
       item, err = GetSwaggerType(parm.Elem())
       if (item==nil) || (err!=nil) || (item.Schema==nil) {
+         Goose.Swagger.Logf(6,"Error get array elem type item=%#v, err:%s", item, err)
+         if (item!=nil) && (err==nil) && (item.Schema==nil) {
+            Goose.Swagger.Logf(6,"And also error get array elem type item.Schema=%#v",item.Schema)
+         }
          return nil, err
       }
       return &SwaggerParameterT{
@@ -199,7 +203,12 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
    if parm.Kind()==reflect.Map {
       item, err = GetSwaggerType(parm.Elem())
+      Goose.Swagger.Logf(6,"map elem type item=%#v, err:%s", item, err)
       if (item==nil) || (err!=nil) || (item.Schema==nil) {
+         Goose.Swagger.Logf(6,"Error get map elem type item=%#v, err:%s", item, err)
+         if (item!=nil) && (err==nil) && (item.Schema==nil) {
+            Goose.Swagger.Logf(6,"And also error get map elem type item.Schema=%#v",item.Schema)
+         }
          return nil, err
       }
 
@@ -223,6 +232,9 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
             Type:              item.Schema.Type,
             Format:            item.Schema.Format,
             Items:             item.Schema.Items,
+         },
+         Schema: &SwaggerSchemaT{
+            Type: item.Schema.Type,
          },
          XKeyType:             ktype,
          XKeyFormat:           kformat,
@@ -253,7 +265,9 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          }
 
          subItem, err = GetSwaggerType(field.Type)
+         Goose.Swagger.Logf(6,"struct subitem=%#v, err:%s", subItem, err)
          if (subItem==nil) || (err != nil) || (subItem.Schema==nil) {
+            Goose.Swagger.Logf(1,"Error getting type of subitem %s: %s",field.Name,err)
             return nil, err
          }
          item.Schema.Required = append(item.Schema.Required,field.Name)
@@ -429,10 +443,10 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    return resp, err
 }
 
-func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) (func ([]string, Unmarshaler) Response) {
+func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type) (func ([]string, Unmarshaler) Response) {
    return func (parms []string, Unmarshal Unmarshaler) Response {
       var httpResp Response
-      var i int
+      var i, j int
       var p, ptmp string
 //                  var outs []reflect.Value
       var ins []reflect.Value
@@ -510,21 +524,33 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype reflect.Type) 
 //                  Goose.OpHandle.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
       Goose.OpHandle.Logf(6,"posttype: %#v",posttype)
       if posttype != nil {
-         postvalue = reflect.New(posttype)
-         err = Unmarshal.Decode(postvalue.Interface())
-         if err != nil {
-            httpResp.Status = http.StatusInternalServerError
-            httpResp.Body   = "Internal server error"
-            httpResp.Header = map[string]string{}
-            Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Interface())
-            return httpResp
+         err = nil
+         j   = 0
+         for (err==nil) && (j<len(posttype)) {
+            Goose.OpHandle.Logf(6,"posttype[%d]: %#v",j,posttype[j])
+            postvalue = reflect.New(posttype[j])
+            err = Unmarshal.Decode(postvalue.Interface())
+            if err != nil && err != io.EOF {
+               httpResp.Status = http.StatusInternalServerError
+               httpResp.Body   = "Internal server error"
+               httpResp.Header = map[string]string{}
+               Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Elem().Interface())
+               return httpResp
+            }
+            if err != io.EOF {
+               Goose.OpHandle.Logf(6,"postvalue: %#v",postvalue)
+               ins = append(ins,reflect.Indirect(postvalue))
+               Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
+//               Goose.OpHandle.Logf(5,"ins2: %c-%c-%c-%c",(*postvalue.Interface().(*string))[0],(*postvalue.Interface().(*string))[1],(*postvalue.Interface().(*string))[2],(*postvalue.Interface().(*string))[3])
+               j++
+            }
          }
-         Goose.OpHandle.Logf(6,"postvalue: %#v",postvalue)
-         ins = append(ins,reflect.Indirect(postvalue))
-         Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
       }
 
-      return met.Func.Call(ins)[0].Interface().(Response)
+      Goose.OpHandle.Logf(5,"ins3: %d:%s",len(ins),ins)
+      retData := met.Func.Call(ins)
+      Goose.OpHandle.Logf(5,"retData: %#v",retData)
+      return retData[0].Interface().(Response)
    }
 }
 
@@ -617,10 +643,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var allowGzip            string
    var enableCORS           string
    var svcRoot              string
-   var i, j                 int
+   var i, j, k              int
    var typ                  reflect.Type
    var typPtr               reflect.Type
-   var pt                   reflect.Type
+   var pt                 []reflect.Type
    var fld                  reflect.StructField
    var method               reflect.Method
    var parmcount            int
@@ -641,6 +667,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var swaggerContact       SwaggerContactT
    var globalDataCount      int
    var responseOk           string
+   var responseCreated      string
+   var responseAccepted     string
    var responses map[string]SwaggerResponseT
    var fldType              reflect.Type
    var doc                  string
@@ -650,6 +678,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var optIndex  map[string]int
    var HdrNew, HdrOld       string
    var MatchedOpsIndex      int
+   var postFields         []string
+   var postField            string
+   var postdata             string
 
    for _, svc = range svcs {
       Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -834,6 +865,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                         (*description) = doc
                      } else {
                         description = SwaggerParameter.Schema.Description
+                        if description == nil {
+                           description = new(string)
+                        }
                      }
 
                      xkeytype := ""
@@ -871,42 +905,49 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.New.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
 
-            query, parmcount, pt, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
+            query, parmcount, _, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
             if err != nil {
                return nil, err
             }
 
-            headers, parmcount, pt, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
+            headers, parmcount, _, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
             if err != nil {
                return nil, err
             }
 
-            if fld.Tag.Get("postdata") != "" {
-               parmcount++
-               if (parmcount+1) != method.Type.NumIn() {
+            postdata = fld.Tag.Get("postdata")
+            if postdata != "" {
+               // Body fields definitions
+               postFields = strings.Split(postdata,",")
+               if (parmcount+len(postFields)+1) != method.Type.NumIn() {
                   return nil, errors.New("Wrong parameter count (with post) at method " + methodName)
                }
-               pt = method.Type.In(parmcount)
-               SwaggerParameter, err = GetSwaggerType(pt)
-               if err != nil {
-                  return nil, err
+
+               pt = make([]reflect.Type,len(postFields))
+               for k, postField = range postFields {
+                  parmcount++
+                  pt[k] = method.Type.In(parmcount)
+                  SwaggerParameter, err = GetSwaggerType(pt[k])
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if SwaggerParameter == nil {
+                     return nil, ErrorInvalidNilParam
+                  }
+
+                  doc = fld.Tag.Get(postField)
+                  if doc != "" {
+                     SwaggerParameter.Schema.Description    = new(string)
+                     (*SwaggerParameter.Schema.Description) = doc
+                  }
+
+                  SwaggerParameter.Name     = postField
+                  SwaggerParameter.In       = "body"
+                  SwaggerParameter.Required = true
+
+                  swaggerParameters = append(swaggerParameters,*SwaggerParameter)
                }
-
-               if SwaggerParameter == nil {
-                  return nil, ErrorInvalidNilParam
-               }
-
-               doc = fld.Tag.Get(fld.Tag.Get("postdata"))
-               if doc != "" {
-                  SwaggerParameter.Schema.Description    = new(string)
-                  (*SwaggerParameter.Schema.Description) = doc
-               }
-
-               SwaggerParameter.Name     = fld.Tag.Get("postdata")
-               SwaggerParameter.In       = "body"
-               SwaggerParameter.Required = true
-
-               swaggerParameters = append(swaggerParameters,*SwaggerParameter)
             } else {
                if (parmcount+1) != method.Type.NumIn() {
                   return nil, errors.New("Wrong parameter count at method " + methodName)
@@ -916,6 +957,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.New.Logf(5,"Registering: %s",re)
             consumes = fld.Tag.Get("consumes")
+            Goose.New.Logf(1,"op:%s consumes: %s tag:%#v",methodName,consumes,fld.Tag)
             if consumes == "" {
                consumes = svcConsumes
             }
@@ -928,63 +970,147 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             responses = map[string]SwaggerResponseT{}
 
             responseOk = fld.Tag.Get("ok")
-            if responseOk != "" {
-               fldType = fld.Type
-               if fldType.Kind() == reflect.Ptr {
-                  fldType = fldType.Elem()
-               }
-
-               SwaggerParameter, err = GetSwaggerType(fldType)
-               if err != nil {
-                  return nil, err
-               }
-
-               if SwaggerParameter == nil {
-                  responses[fmt.Sprintf("%d",http.StatusNoContent)] = SwaggerResponseT{
-                     Description: responseOk,
-                  }
-               } else {
-
-                  doc = fld.Tag.Get(fld.Name)
-
-                  if doc != "" {
-                     SwaggerParameter.Schema.Description    = new(string)
-                     (*SwaggerParameter.Schema.Description) = doc
+            responseCreated = fld.Tag.Get("created")
+            responseAccepted = fld.Tag.Get("accepted")
+            if responseOk != "" || responseCreated != "" || responseAccepted != "" {
+               if responseOk != "" {
+                  fldType = fld.Type
+                  if fldType.Kind() == reflect.Ptr {
+                     fldType = fldType.Elem()
                   }
 
-                  if SwaggerParameter.Schema == nil {
-                     SwaggerParameter.Schema = &SwaggerSchemaT{}
+                  SwaggerParameter, err = GetSwaggerType(fldType)
+                  if err != nil {
+                     return nil, err
                   }
 
-                  if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
-                     SwaggerParameter.Schema.Type = SwaggerParameter.Type
-                  }
-
-                  responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
-                     Description: responseOk,
-                     Schema:      SwaggerParameter.Schema,
-                  }
-                  //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
-                  //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                  Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
-               }
-            } else {
-               if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
-                  responseList := responseFunc.Func.Call([]reflect.Value{})[0].Interface().(map[string]ResponseT)
-                  for responseStatus, responseSchema := range responseList {
-                     SwaggerParameter, err = GetSwaggerType(reflect.TypeOf(responseSchema.TypeReturned))
-                     if err != nil {
-                        return nil, err
+                  if SwaggerParameter == nil {
+                     responses[fmt.Sprintf("%d",http.StatusNoContent)] = SwaggerResponseT{
+                        Description: responseOk,
                      }
-                     if SwaggerParameter == nil {
-                        responses[responseStatus] = SwaggerResponseT{
-                           Description: responseSchema.Description,
-                        }
-                     } else {
-                        responses[responseStatus] = SwaggerResponseT{
-                           Description: responseSchema.Description,
-                           Schema:      SwaggerParameter.Schema,
-                        }
+                  } else {
+
+                     doc = fld.Tag.Get(fld.Name)
+
+                     if doc != "" {
+                        SwaggerParameter.Schema.Description    = new(string)
+                        (*SwaggerParameter.Schema.Description) = doc
+                     }
+
+                     if SwaggerParameter.Schema == nil {
+                        SwaggerParameter.Schema = &SwaggerSchemaT{}
+                     }
+
+                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
+                     }
+
+                     responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
+                        Description: responseOk,
+                        Schema:      SwaggerParameter.Schema,
+                     }
+                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
+                  }
+               }
+               if responseCreated != "" {
+                  fldType = fld.Type
+                  if fldType.Kind() == reflect.Ptr {
+                     fldType = fldType.Elem()
+                  }
+
+                  SwaggerParameter, err = GetSwaggerType(fldType)
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if SwaggerParameter == nil {
+                     responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
+                        Description: responseCreated,
+                     }
+                  } else {
+
+                     doc = fld.Tag.Get(fld.Name)
+
+                     if doc != "" {
+                        SwaggerParameter.Schema.Description    = new(string)
+                        (*SwaggerParameter.Schema.Description) = doc
+                     }
+
+                     if SwaggerParameter.Schema == nil {
+                        SwaggerParameter.Schema = &SwaggerSchemaT{}
+                     }
+
+                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
+                     }
+
+                     responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
+                        Description: responseCreated,
+                        Schema:      SwaggerParameter.Schema,
+                     }
+                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusCreated)].Schema))
+                  }
+               }
+               if responseAccepted != "" {
+                  fldType = fld.Type
+                  if fldType.Kind() == reflect.Ptr {
+                     fldType = fldType.Elem()
+                  }
+
+                  SwaggerParameter, err = GetSwaggerType(fldType)
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if SwaggerParameter == nil {
+                     responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
+                        Description: responseAccepted,
+                     }
+                  } else {
+
+                     doc = fld.Tag.Get(fld.Name)
+
+                     if doc != "" {
+                        SwaggerParameter.Schema.Description    = new(string)
+                        (*SwaggerParameter.Schema.Description) = doc
+                     }
+
+                     if SwaggerParameter.Schema == nil {
+                        SwaggerParameter.Schema = &SwaggerSchemaT{}
+                     }
+
+                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
+                     }
+
+                     responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
+                        Description: responseAccepted,
+                        Schema:      SwaggerParameter.Schema,
+                     }
+                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusAccepted)].Schema))
+                  }
+               }
+            } else if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
+               responseList := responseFunc.Func.Call([]reflect.Value{})[0].Interface().(map[string]ResponseT)
+               for responseStatus, responseSchema := range responseList {
+                  SwaggerParameter, err = GetSwaggerType(reflect.TypeOf(responseSchema.TypeReturned))
+                  if err != nil {
+                     return nil, err
+                  }
+                  if SwaggerParameter == nil {
+                     responses[responseStatus] = SwaggerResponseT{
+                        Description: responseSchema.Description,
+                     }
+                  } else {
+                     responses[responseStatus] = SwaggerResponseT{
+                        Description: responseSchema.Description,
+                        Schema:      SwaggerParameter.Schema,
                      }
                   }
                }
@@ -1010,9 +1136,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Path: path,
                consumes: consumes,
                produces: produces,
-               Headers: headers,
-               Query: query,
-               Handle: buildHandle(svcRecv,method,pt),
+               Headers:  headers,
+               Query:    query,
+               Body:     postFields,
+               Handle:   buildHandle(svcRecv,method,pt),
             })
 
             reAllOps += "|(" + re + ")"
@@ -1155,10 +1282,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var resp                   Response
    var cert, UserCert        *x509.Certificate
    var found                  bool
-   var  ok              bool
-//   var ok              bool
-//   var body                 []byte
+   var ok                     bool
    var err                    error
+   var errIFace               interface{}
    var mrsh                   Marshaler
    var umrsh                  Unmarshaler
    var outWriter              io.Writer
@@ -1168,7 +1294,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var header                 string
    var qry                    string
    var buf                  []byte
-
+   var met                    reflect.Method
 
    Goose.Serve.Logf(5,"Peer certificates")
    found = false
@@ -1182,8 +1308,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-
-
    if r.URL.Path=="/crtlogin" {
       w.WriteHeader(http.StatusOK)
       w.Write([]byte(" "))
@@ -1195,11 +1319,21 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       Goose.Serve.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
       w.WriteHeader(http.StatusNotFound)
       w.Write(svc.Config.PageNotFound())
+
+      // Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
+      met, ok = reflect.TypeOf(svc.Config).MethodByName("SavePending")
+      if ok {
+         // Stores the certificate in the authorization pending folder
+         errIFace = met.Func.Call([]reflect.Value{reflect.ValueOf(svc.Config),reflect.ValueOf(cert)})[0].Interface()
+         switch errIFace.(type) {
+            case error:
+               Goose.Serve.Logf(1,"Internal server error saving unauthorized certificate for %s: %s",cert.Subject.CommonName,errIFace.(error))
+         }
+      }
       return
    }
 
    Goose.Serve.Logf(7,"TLS:%#v",r.TLS)
-
 
    hd := w.Header()
    hd.Add("Access-Control-Allow-Origin","*")
@@ -1297,6 +1431,15 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       umrsh = json.NewDecoder(r.Body)
    } else if endpoint.consumes == "application/xml" {
       umrsh = xml.NewDecoder(r.Body)
+   } else if endpoint.consumes == "multipart/form-data" {
+//      bdy, err = ioutil.ReadAll(r.Body)
+//      ioutil.WriteFile("upload.bin", bdy, 0600)
+//      Goose.Serve.Logf(6,"body=%s",bdy)
+      umrsh, err = NewMultipartUnmarshaler(r,endpoint.Body)
+      if err != nil {
+         Goose.Serve.Logf(1,"Error initializing multipart/formdata unmarshaller for %s: %s", r.URL.Path, err)
+         return
+      }
    }
 
    Goose.Serve.Logf(6,"umrsh=%#v",umrsh)

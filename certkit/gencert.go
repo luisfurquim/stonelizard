@@ -184,6 +184,12 @@ func (crtkit *CertKit) GenerateClient(subject pkix.Name, email, password string)
       EmailAddresses:        []string{email},
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+      UnknownExtKeyUsage:    []asn1.ObjectIdentifier{
+         []int{1,3,6,1,4,1,311,20,2,2}, // SmartCard Logon
+         []int{1,3,6,1,4,1,311,10,3,16}, // Verify signature for nonrepudiation?
+         //'1.3.6.1.4.1.311.10.3.1' => 'certTrustListSigning'
+         // '1.3.6.1.4.1.311.10.3.12' => 'szOID_KP_DOCUMENT_SIGNING',
+      },
       BasicConstraintsValid: true,
    }
 
