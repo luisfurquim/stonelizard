@@ -37,16 +37,21 @@ func New(srvsubject, casubject pkix.Name, host, email string) (*CertKit, error) 
 }
 
 
-func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string) error {
-   var e          error
-   var derBytes []byte
+func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, NotBefore ...time.Time) error {
+   var e           error
+   var derBytes  []byte
+   var notBefore   time.Time
 
    priv, err := rsa.GenerateKey(rand.Reader, 2048)
    if err != nil {
       return errors.New(fmt.Sprintf("failed to generate private key: %s", err))
    }
 
-   notBefore         := time.Now()
+   if len(NotBefore) > 0 {
+      notBefore = NotBefore[0]
+   } else {
+      notBefore = time.Now()
+   }
    serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
    if err != nil {
       return errors.New(fmt.Sprintf("failed to generate serial number: %s", err))

@@ -103,7 +103,7 @@ func (sl *StoppableListener) Accept() (net.Conn, error) {
       }
 
       if err==nil {
-         Goose.Listener.Logf(2,"done listening")
+         Goose.Listener.Logf(3,"done listening")
          return newConn, nil
       }
 
@@ -1317,17 +1317,19 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    if !found {
       Goose.Serve.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
-      w.WriteHeader(http.StatusNotFound)
+      w.WriteHeader(http.StatusUnauthorized)
       w.Write(svc.Config.PageNotFound())
 
-      // Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
-      met, ok = reflect.TypeOf(svc.Config).MethodByName("SavePending")
-      if ok {
-         // Stores the certificate in the authorization pending folder
-         errIFace = met.Func.Call([]reflect.Value{reflect.ValueOf(svc.Config),reflect.ValueOf(cert)})[0].Interface()
-         switch errIFace.(type) {
-            case error:
-               Goose.Serve.Logf(1,"Internal server error saving unauthorized certificate for %s: %s",cert.Subject.CommonName,errIFace.(error))
+      if cert != nil {
+         // Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
+         met, ok = reflect.TypeOf(svc.Config).MethodByName("SavePending")
+         if ok {
+            // Stores the certificate in the authorization pending folder
+            errIFace = met.Func.Call([]reflect.Value{reflect.ValueOf(svc.Config),reflect.ValueOf(cert)})[0].Interface()
+            switch errIFace.(type) {
+               case error:
+                  Goose.Serve.Logf(1,"Internal server error saving unauthorized certificate for %s: %s",cert.Subject.CommonName,errIFace.(error))
+            }
          }
       }
       return

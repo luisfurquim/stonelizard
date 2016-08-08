@@ -86,7 +86,7 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
             if (vtype==fhtype) || (vtype.Kind() == reflect.Interface) {
                return f[0], nil
             }
-            Goose.OpHandle.Logf(0,"Um arquivo vtype:%q", vtype)
+            Goose.OpHandle.Logf(5,"Um arquivo vtype:%q", vtype)
             return nil, ErrorInvalidParameterType
          }
    }
@@ -99,7 +99,7 @@ func (mp *MultipartUnmarshaler) Decode(v interface{}) error {
    var tmp    interface{}
    var err    error
 
-   Goose.OpHandle.Logf(0,"MultipartUnmarshaler: fields=%q v=%#v form=%q",mp.fields,v,mp.form)
+   Goose.OpHandle.Logf(6,"MultipartUnmarshaler: fields=%q v=%#v form=%q",mp.fields,v,mp.form)
 
    if mp.index >= len(mp.fields) {
       return io.EOF
