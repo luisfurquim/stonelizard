@@ -800,7 +800,7 @@ var ErrorMissingRequiredQueryField = errors.New("Error missing required query fi
 var ErrorMissingRequiredPostBodyField = errors.New("Error missing required post body field")
 
 
-var Goose struct {
+type StonelizardG struct {
    Listener     goose.Alert
    Swagger      goose.Alert
    Initialize   goose.Alert
@@ -811,4 +811,4 @@ var Goose struct {
    Serve        goose.Alert
 }
 
-
+var Goose StonelizardG

@@ -37,7 +37,9 @@ type CertKit struct {
 
 var ErrorCertsMustHaveKeys = errors.New("Either provide both certificate and key or none of them")
 
-var Goose struct {
-   Generator goose.Alert
-   Loader    goose.Alert
+type CertkitG struct {
+   Generator goose.Alert `json:"Generator"`
+   Loader    goose.Alert `json:"Loader"`
 }
+
+var Goose  CertkitG

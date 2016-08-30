@@ -120,10 +120,12 @@ func (sl *StoppableListener) Stop() {
 
 //Close the webservices and the listeners
 func (svc Service) Close() {
+   Goose.Listener.Logf(2,"Closing listeners")
    svc.Listener.Stop()
    svc.Listener.Close()
    svc.CRLListener.Stop()
    svc.CRLListener.Close()
+   Goose.Listener.Logf(2,"All listeners closed")
 }
 
 func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
@@ -1295,6 +1297,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var qry                    string
    var buf                  []byte
    var met                    reflect.Method
+   var commonName             string
 
    Goose.Serve.Logf(5,"Peer certificates")
    found = false
@@ -1304,6 +1307,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          if bytes.Equal(UserCert.Raw,cert.Raw) {
             found = true
             break
+         } else {
+            Goose.Serve.Logf(4,"certs diff: %s",cert.Subject.CommonName)
          }
       }
    }
@@ -1317,6 +1322,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    if !found {
       Goose.Serve.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
+      Goose.Serve.Logf(6,"Unauthorized access attempt, certs: %#v",r.TLS.PeerCertificates)
+      for _, cert = range r.TLS.PeerCertificates {
+         Goose.Serve.Logf(4,"Authorized access cert: %#v",cert.Subject)
+      }
+      for commonName, _ = range svc.Config.CertKit().UserCerts {
+         Goose.Serve.Logf(3,"access grantable to: %s",commonName)
+      }
+
       w.WriteHeader(http.StatusUnauthorized)
       w.Write(svc.Config.PageNotFound())
 
