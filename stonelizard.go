@@ -7,7 +7,6 @@ import (
    "net"
    "sync"
    "time"
-   "bytes"
    "errors"
    "regexp"
    "strconv"
@@ -17,6 +16,7 @@ import (
    "net/http"
 //   "io/ioutil"
    "crypto/tls"
+   "crypto/rsa"
    "crypto/x509"
    "encoding/xml"
    "encoding/json"
@@ -301,23 +301,22 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 }
 
 
-//From the endpoint, defined in the Service struct, init the variables, the certificates infrastructure and the server listeners.
-//Besides, load de configuration file to start basic data required for the proposed solution.
+// From the endpoint, defined in the Service struct, init the variables and the server listeners.
+// Besides, load de configuration file to start basic data required for the proposed solution.
 func initSvc(svcElem EndPointHandler) (*Service, error) {
-   var err             error
-   var resp           *Service
-//   var svcRecv         reflect.Value
-   var cfg             Shaper
-   var ls              net.Listener
-/*
-   var ClientCertPem []byte
-   var ClientCert     *x509.Certificate
-   var CertIdStr     []string
-   var CertId          int
-*/
+   var err     error
+   var i       int
+   var resp   *Service
+   var cfg     Shaper
+   var ls      net.Listener
+   var met     reflect.Method
+   var ok      bool
+   var typ     reflect.Type
+   var fld     reflect.StructField
+   var auth    AuthT
 
    resp = &Service{
-      AuthRequired: false,
+//      AuthRequired: false,
       MatchedOps: map[int]int{},
    }
 
@@ -368,89 +367,62 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       return nil, err
    }
 
-/*
-   resp.CAServer = resp.Config.CACRL()
-
-   resp.PageNotFound, err = ioutil.ReadFile(resp.PageNotFoundPath)
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading %s file: %s", resp.PageNotFoundPath, err)
-      return nil, err
+   typ = reflect.ValueOf(svcElem).Type()
+   if typ.Kind()==reflect.Ptr {
+      typ = typ.Elem()
    }
 
-   err = resp.ReadCert(&resp.Auth.CACertPem,     &resp.Auth.CACert,     resp.PemPath + "/rootCA.crt")
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading rootCA.crt file: %s", err)
-      return nil, err
-   }
-   err = resp.ReadCert(&resp.Auth.ServerCertPem, &resp.Auth.ServerCert, resp.PemPath + "/server.crt")
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading server.crt file: %s", err)
-      return nil, err
-   }
 
-   err = resp.ReadCRL(&resp.Auth.CACRL, "rootCA.crl")
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading rootCA.crl file: %s", err)
-      return nil, err
-   }
+   met, ok = typ.MethodByName("SavePending")
+   if ok {
+      resp.SavePending = func(info interface{}) error {
+         var err error
 
-//   err = resp.readEcdsaKey(&resp.Auth.CAKeyPem,       &resp.Auth.CAKey,      "rootCA.key")
-//   if err != nil {
-//      Goose.Initialize.Logf(1,"Failed reading rootCA.key file: %s", err)
-//      return nil, err
-//   }
-   err = resp.ReadRsaKey(&resp.Auth.CAKeyPem,   &resp.Auth.CAKey,  resp.PemPath + "/rootCA.key")
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading rootCA.key file: %s", err)
-      return nil, err
-   }
+         errIFace := met.Func.Call([]reflect.Value{reflect.ValueOf(resp.Config),reflect.ValueOf(info)})[0].Interface()
+         switch errIFace.(type) {
+            case error:
+               err = errIFace.(error)
+         }
 
-   err = resp.ReadRsaKey(&resp.Auth.ServerKeyPem,   &resp.Auth.ServerKey,  resp.PemPath + "/server.key")
-   if err != nil {
-      Goose.Initialize.Logf(1,"Failed reading server.key file: %s", err)
-      return nil, err
-   }
-
-   resp.CertPool = x509.NewCertPool()
-   resp.CertPool.AddCert(resp.Auth.CACert)
-
-   err = filepath.Walk(resp.PemPath + "/client", func (path string, f os.FileInfo, err error) error {
-      if (len(path)<4) || (path[len(path)-4:]!=".crt") {
+         if err != nil {
+            Goose.Auth.Logf(1,"Internal server error saving unauthorized access attempt info: %s",err)
+            Goose.Auth.Logf(5,"Dump of info on internal server error saving unauthorized access attempt info: %#v",info)
+         }
+         return err
+      }
+   } else {
+      resp.SavePending = func(interface{}) error {
          return nil
       }
+   }
 
-      err = resp.ReadCert(&ClientCertPem, &ClientCert, path)
-      if err != nil {
-         Goose.Initialize.Logf(1,"Failed reading %s file: %s", path, err)
-         return err
+   Goose.Auth.Logf(5,"cfg: %#v",cfg)
+   Goose.Auth.Logf(5,"cfg.CertKit(): %#v",cfg.CertKit())
+   Goose.Auth.Logf(5,"auth: %#v",auth)
+   Goose.Auth.Logf(5,"auth: %#v",reflect.TypeOf((*AuthT)(nil)).Elem())
+   if cfg.CertKit()!=nil && reflect.TypeOf(cfg.CertKit()).Implements(reflect.TypeOf((*AuthT)(nil)).Elem()) {
+      resp.Authorizer = cfg.CertKit()
+   } else {
+      resp.Authorizer = PublicAccessT{}
+   }
+
+   for i=0; i<typ.NumField(); i++ {
+      fld = typ.Field(i)
+      if fld.Anonymous && fld.Type.Implements(reflect.TypeOf((*AuthT)(nil)).Elem()) {
+         resp.Authorizer = reflect.ValueOf(svcElem).Field(i).Interface().(AuthT)
+         break
       }
+   }
 
-      CertIdStr = strings.Split(ClientCert.Subject.CommonName,":")
-      if len(CertIdStr) > 2 {
-         Goose.Initialize.Logf(1,"Failed extracting %s subject name",ClientCert.Subject.CommonName)
-         return err
-      }
-
-      fmt.Sscanf(CertIdStr[len(CertIdStr)-1],"%d",&CertId)
-      if resp.UserCerts == nil {
-         resp.UserCerts = map[int]*x509.Certificate{CertId:ClientCert}
-      } else {
-         resp.UserCerts[CertId] = ClientCert
-      }
-
-     return nil
-   })
-
-*/
    return resp, err
 }
 
-func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type) (func ([]string, Unmarshaler) Response) {
-   return func (parms []string, Unmarshal Unmarshaler) Response {
+func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type, accesstype uint8) (func ([]string, Unmarshaler, interface{}) Response) {
+   return func (parms []string, Unmarshal Unmarshaler, authinfo interface{}) Response {
       var httpResp Response
       var i, j int
       var p, ptmp string
-//                  var outs []reflect.Value
+//       var outs []reflect.Value
       var ins []reflect.Value
       var parm reflect.Value
       var parmType reflect.Type
@@ -460,6 +432,7 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type
       var elemDelim, keyDelim string
       var keyval string
       var arrKeyVal []string
+      var errmsg string
 
       ins = []reflect.Value{this}
       for i, p = range parms {
@@ -550,6 +523,23 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type
       }
 
       Goose.OpHandle.Logf(5,"ins3: %d:%s",len(ins),ins)
+      if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo{
+         Goose.OpHandle.Logf(5,"Checking the need for appending authinfo")
+         if (len(ins)+1) == met.Type.NumIn() {
+            Goose.OpHandle.Logf(5,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
+            ins = append(ins,reflect.ValueOf(authinfo))
+         }
+      }
+
+      if len(ins) != met.Type.NumIn() {
+         errmsg = fmt.Sprintf("Operation call with wrong input argument count: received:%d, expected:%d",len(ins), met.Type.NumIn())
+         Goose.OpHandle.Logf(1,errmsg)
+         return Response {
+            Status:            http.StatusBadRequest,
+            Body:              errmsg,
+         }
+      }
+
       retData := met.Func.Call(ins)
       Goose.OpHandle.Logf(5,"retData: %#v",retData)
       return retData[0].Interface().(Response)
@@ -644,6 +634,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var svcProduces          string
    var allowGzip            string
    var enableCORS           string
+   var proto              []string
+   var svcProto           []string
    var svcRoot              string
    var i, j, k              int
    var typ                  reflect.Type
@@ -683,6 +675,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var postFields         []string
    var postField            string
    var postdata             string
+//   var accesstype           uint8
+   var parmnames          []string
 
    for _, svc = range svcs {
       Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
@@ -723,6 +717,32 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   svcProduces = typ.Field(i).Tag.Get("produces")
                   allowGzip   = typ.Field(i).Tag.Get("allowGzip")
                   enableCORS  = typ.Field(i).Tag.Get("enableCORS")
+                  if typ.Field(i).Tag.Get("proto") != "" {
+                     svcProto    = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+                  } else {
+                     svcProto    = []string{"https"}
+                  }
+
+                  Goose.New.Logf(3,"Access tag: %s", typ.Field(i).Tag.Get("access"))
+
+                  if typ.Field(i).Tag.Get("access") != "" {
+                     switch strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("access")," ")) {
+                        case "none":
+                           resp.Access = AccessNone
+                        case "auth":
+                           resp.Access = AccessAuth
+                        case "authinfo":
+                           resp.Access = AccessAuthInfo
+                        case "verifyauth":
+                           resp.Access = AccessVerifyAuth
+                        case "verifyauthinfo":
+                           resp.Access = AccessVerifyAuthInfo
+                     }
+                     Goose.New.Logf(3,"Custom access type: %d", resp.Access)
+                  } else {
+                     resp.Access = AccessAuthInfo
+                     Goose.New.Logf(3,"Default access type: %d", resp.Access)
+                  }
                   globalDataCount++
                }
             }
@@ -770,7 +790,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
          hostport := strings.Split(resp.Config.ListenAddress(),":")
          if hostport[0] == "" {
-            hostport[0] = resp.Config.CertKit().ServerCert.DNSNames[0]
+            hostport[0] = resp.Authorizer.GetDNSNames()[0]
          }
 
          resp.Swagger = &SwaggerT{
@@ -778,12 +798,14 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             Info:        swaggerInfo,
             Host:        strings.Join(hostport,":"),
             BasePath:    "/" + svcRoot[:len(svcRoot)-1],
-            Schemes:     []string{"https"},
+            Schemes:     svcProto,
             Consumes:    []string{svcConsumes},
             Produces:    []string{svcProduces},
             Paths:       map[string]SwaggerPathT{},
             Definitions: map[string]SwaggerSchemaT{},
          }
+
+         resp.Proto = svcProto
 
          Goose.New.Logf(6,"enableCORS: [%s]",enableCORS)
          if enableCORS != "" {
@@ -842,6 +864,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             re = "^" + strings.ToUpper(httpmethod) + ":/" + svcRoot
 
             parmcount = 0
+            parmnames = []string{}
+
             for _, tk = range strings.Split(strings.Trim(path,"/"),"/") {
                if tk!="" {
                   if (tk[0]=='{') && (tk[len(tk)-1]=='}') {
@@ -888,6 +912,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                            Description: *description,
                            Format: SwaggerParameter.Format,
                         })
+                     parmnames = append(parmnames,tk[1:len(tk)-1])
                   } else if (tk[0]!='{') && (tk[len(tk)-1]!='}') {
                      for _, c = range tk {
                         re += fmt.Sprintf("\\x{%x}",c)
@@ -917,14 +942,13 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                return nil, err
             }
 
+            parmnames = append(parmnames, query...)
+            parmnames = append(parmnames, headers...)
+
             postdata = fld.Tag.Get("postdata")
             if postdata != "" {
                // Body fields definitions
                postFields = strings.Split(postdata,",")
-               if (parmcount+len(postFields)+1) != method.Type.NumIn() {
-                  return nil, errors.New("Wrong parameter count (with post) at method " + methodName)
-               }
-
                pt = make([]reflect.Type,len(postFields))
                for k, postField = range postFields {
                   parmcount++
@@ -944,17 +968,38 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      (*SwaggerParameter.Schema.Description) = doc
                   }
 
+                  parmnames                 = append(parmnames, postField)
                   SwaggerParameter.Name     = postField
                   SwaggerParameter.In       = "body"
                   SwaggerParameter.Required = true
 
                   swaggerParameters = append(swaggerParameters,*SwaggerParameter)
                }
+
+/*
+               if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
+                  parmcount++
+               }
+
+               if (parmcount+len(postFields)+1) != method.Type.NumIn() {
+                  return nil, errors.New("Wrong parameter count (with post) at method " + methodName)
+               }
+*/
+            } else {
+               pt = nil
+            }
+
+            if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
+               if (parmcount+1) != method.Type.NumIn() {
+                  parmcount++
+                  if (parmcount+1) != method.Type.NumIn() {
+                     return nil, errors.New("Wrong parameter (with info) count at method " + methodName)
+                  }
+               }
             } else {
                if (parmcount+1) != method.Type.NumIn() {
                   return nil, errors.New("Wrong parameter count at method " + methodName)
                }
-               pt = nil
             }
 
             Goose.New.Logf(5,"Registering: %s",re)
@@ -967,6 +1012,12 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             produces = fld.Tag.Get("produces")
             if produces == "" {
                produces = svcProduces
+            }
+
+            if fld.Tag.Get("proto") != "" {
+               proto = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+            } else {
+               proto = svcProto
             }
 
             responses = map[string]SwaggerResponseT{}
@@ -1120,12 +1171,12 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
 
             resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = SwaggerOperationT{
-               Schemes: []string{"https"},
+               Schemes:     proto,
                OperationId: methodName,
-               Parameters: swaggerParameters,
-               Responses: responses,
-               Consumes: []string{consumes},
-               Produces: []string{produces},
+               Parameters:  swaggerParameters,
+               Responses:   responses,
+               Consumes:  []string{consumes},
+               Produces:  []string{produces},
             }
 
             Goose.New.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
@@ -1134,14 +1185,26 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             reComp                           = regexp.MustCompile(re)
             MatchedOpsIndex                 += reComp.NumSubexp() + 1
 
+/*
+            switch strings.ToLower(fld.Tag.Get("access")) {
+               case "none":     accesstype = AccessNone
+               case "auth":     accesstype = AccessAuth
+               case "authinfo": accesstype = AccessAuthInfo
+               default:         accesstype = AccessAuth
+            }
+*/
+
             resp.Svc = append(resp.Svc,UrlNode{
-               Path: path,
-               consumes: consumes,
-               produces: produces,
-               Headers:  headers,
-               Query:    query,
-               Body:     postFields,
-               Handle:   buildHandle(svcRecv,method,pt),
+               Proto:     proto,
+               Path:      path,
+               consumes:  consumes,
+               produces:  produces,
+               Headers:   headers,
+               Query:     query,
+               Body:      postFields,
+               ParmNames: parmnames,
+               Handle:    buildHandle(svcRecv,method,pt,resp.Access),
+//               Access:    resp.Access,
             })
 
             reAllOps += "|(" + re + ")"
@@ -1192,11 +1255,16 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
 //Init a webserver and wait for http requests.
 func (svc *Service) ListenAndServeTLS() error {
-   var err    error
-   var aType  tls.ClientAuthType
-   var wg     sync.WaitGroup
-   var crypls net.Listener
-   var hn                   string
+   var err      error
+   var wg       sync.WaitGroup
+   var crypls   net.Listener
+   var hn       string
+   var useHttps bool
+   var useHttp  bool
+   var unode    UrlNode
+   var p        string
+   var auth     AuthT
+   var tc      *tls.Config
 
    if svc.Config.ListenAddress()[0] == ':' {
       hn, err = os.Hostname()
@@ -1206,69 +1274,86 @@ func (svc *Service) ListenAndServeTLS() error {
       }
    }
 
-   if svc.AuthRequired {
-      aType = tls.RequireAndVerifyClientCert
-   } else {
-//      aType = tls.RequireAnyClientCert
-      aType = tls.RequestClientCert
+FindEncLoop:
+   for _, unode = range svc.Svc {
+      for _, p = range unode.Proto {
+         if p == "https" {
+            useHttps = true
+         }
+
+         if p == "http" {
+            useHttp = true
+         }
+
+         if useHttp && useHttps {
+            break FindEncLoop
+         }
+      }
    }
 
-   Goose.InitServe.Logf(6,"auth: %#v",aType)
 
-   srv := &http.Server{
-      Addr: hn + svc.Config.ListenAddress(),
-      Handler: svc,
+   if useHttps {
+      auth = svc.Authorizer
 
-      TLSConfig: &tls.Config{
-         ClientAuth: aType,
-//         ClientCAs: svc.CertPool,
-//         InsecureSkipVerify: true,
-         Certificates: make([]tls.Certificate, 1),
-      },
+      wg.Add(2)
+
+      go func() {
+         var errcrl error
+         defer wg.Done()
+         if svc.Config.CRLListenAddress() != "" {
+            errcrl = auth.StartCRLServer(hn + svc.Config.CRLListenAddress(), svc.CRLListener)
+            if errcrl != nil {
+               Goose.InitServe.Logf(5,"Error starting CRL listener: %s", errcrl)
+               err = errcrl
+            } else {
+               Goose.InitServe.Logf(5,"CRL Listen started listening")
+            }
+         }
+      }()
+
+      go func() {
+         var errsrv error
+         defer wg.Done()
+
+//         tc, errsrv = auth.GetTLSConfig(svc.AuthRequired)
+         tc, errsrv = auth.GetTLSConfig(svc.Access)
+         if errsrv != nil {
+            Goose.InitServe.Logf(1,"Failed setting up listener encryption parameters: %s",err)
+            err = errsrv
+            return
+         }
+
+         srv := &http.Server{
+            Addr: hn + svc.Config.ListenAddress(),
+            Handler: svc,
+            TLSConfig: tc,
+         }
+
+         crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
+
+         errsrv = srv.Serve(crypls)
+         if errsrv != nil {
+            Goose.InitServe.Logf(5,"Error starting service listener: %s", errsrv)
+            err = errsrv
+         } else {
+            Goose.InitServe.Logf(5,"Service started listening")
+         }
+      }()
+
+      wg.Wait()
+
+   } else if useHttp { // TODO: provide 2 listeners and change this XOR to an OR
+      srv := &http.Server{
+         Addr: hn + svc.Config.ListenAddress(),
+         Handler: svc,
+      }
+      err = srv.Serve(svc.Listener)
+      if err != nil {
+         Goose.InitServe.Logf(5,"Error starting service listener: %s", err)
+      } else {
+         Goose.InitServe.Logf(5,"Service started listening")
+      }
    }
-
-/*
-   srv.TLSConfig.Certificates[0], err = tls.LoadX509KeyPair(svc.PemPath + "/server.crt", svc.PemPath + "/server.key")
-   if err != nil {
-      Goose.InitServe.Logf(1,"Failed reading server certificates: %s",err)
-      return err
-   }
-*/
-
-   srv.TLSConfig.Certificates[0] = svc.Config.CertKit().ServerX509KeyPair
-   Goose.InitServe.Logf(5,"X509KeyPair used: %#v",srv.TLSConfig.Certificates[0])
-   srv.TLSConfig.BuildNameToCertificate()
-
-   crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
-
-   srvcrl := &http.Server{
-      Addr: hn + svc.Config.CRLListenAddress(),
-      Handler: svc.Config.CertKit(),
-   }
-
-   wg.Add(2)
-
-   go func() {
-      Goose.InitServe.Logf(5,"CRL Listen Address: %s",svc.Config.CRLListenAddress())
-      defer wg.Done()
-      err = srvcrl.Serve(svc.CRLListener)
-
-//      Goose.InitServe.Logf(5,"CRL Listen is serving")
-//      err = http.ListenAndServe(svc.CRLListenAddress,svc.Auth)
-//      if err != nil {
-//         Goose.InitServe.Fatalf(1,"Error serving CRL: %s",err)
-//      }
-      Goose.InitServe.Logf(5,"CRL Listen ended listening")
-   }()
-
-
-   go func() {
-      defer wg.Done()
-      err = srv.Serve(crypls)
-      Goose.InitServe.Logf(5,"Main Listen ended listening")
-   }()
-
-   wg.Wait()
 
    Goose.InitServe.Logf(1,"Ending listening")
 
@@ -1279,14 +1364,12 @@ func (svc *Service) ListenAndServeTLS() error {
 func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var match                []string
    var parms                []string
+   var authparms              map[string]interface{}
    var i, j                   int
    var endpoint               UrlNode
    var resp                   Response
-   var cert, UserCert        *x509.Certificate
-   var found                  bool
    var ok                     bool
    var err                    error
-   var errIFace               interface{}
    var mrsh                   Marshaler
    var umrsh                  Unmarshaler
    var outWriter              io.Writer
@@ -1296,59 +1379,16 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var header                 string
    var qry                    string
    var buf                  []byte
-   var met                    reflect.Method
-   var commonName             string
+   var httpstat               int
+   var authinfo               interface{}
 
-   Goose.Serve.Logf(5,"Peer certificates")
-   found = false
-   for _, cert = range r.TLS.PeerCertificates {
-      Goose.Serve.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
-      if UserCert, ok = svc.Config.CertKit().UserCerts[cert.Subject.CommonName]; ok {
-         if bytes.Equal(UserCert.Raw,cert.Raw) {
-            found = true
-            break
-         } else {
-            Goose.Serve.Logf(4,"certs diff: %s",cert.Subject.CommonName)
-         }
-      }
-   }
+   Goose.Serve.Logf(1,"Access %s from %s", r.URL.Path, r.RemoteAddr)
 
    if r.URL.Path=="/crtlogin" {
       w.WriteHeader(http.StatusOK)
       w.Write([]byte(" "))
       return
    }
-
-
-   if !found {
-      Goose.Serve.Logf(1,"Unauthorized access attempt, method: %s",r.Method)
-      Goose.Serve.Logf(6,"Unauthorized access attempt, certs: %#v",r.TLS.PeerCertificates)
-      for _, cert = range r.TLS.PeerCertificates {
-         Goose.Serve.Logf(4,"Authorized access cert: %#v",cert.Subject)
-      }
-      for commonName, _ = range svc.Config.CertKit().UserCerts {
-         Goose.Serve.Logf(3,"access grantable to: %s",commonName)
-      }
-
-      w.WriteHeader(http.StatusUnauthorized)
-      w.Write(svc.Config.PageNotFound())
-
-      if cert != nil {
-         // Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
-         met, ok = reflect.TypeOf(svc.Config).MethodByName("SavePending")
-         if ok {
-            // Stores the certificate in the authorization pending folder
-            errIFace = met.Func.Call([]reflect.Value{reflect.ValueOf(svc.Config),reflect.ValueOf(cert)})[0].Interface()
-            switch errIFace.(type) {
-               case error:
-                  Goose.Serve.Logf(1,"Internal server error saving unauthorized certificate for %s: %s",cert.Subject.CommonName,errIFace.(error))
-            }
-         }
-      }
-      return
-   }
-
-   Goose.Serve.Logf(7,"TLS:%#v",r.TLS)
 
    hd := w.Header()
    hd.Add("Access-Control-Allow-Origin","*")
@@ -1387,6 +1427,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
+   parms = []string{}
+   authparms = map[string]interface{}{}
 
 //   for _, endpoint = range svc.Svc {
    for i=1; i<len(match); i++ {
@@ -1394,9 +1436,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       if len(match[i]) > 0 {
          Goose.Serve.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,r.URL.Path)
          endpoint = svc.Svc[svc.MatchedOps[i-1]]
-         parms = []string{}
-         for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {}
+         for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
+            authparms[endpoint.ParmNames[j-i-1]] = match[j]
+         }
          parms = match[i+1:j]
+         j -= i + 1
          break
       }
    }
@@ -1424,6 +1468,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             return
          }
          parms = append(parms,r.Form[qry][0]) // TODO array support
+         authparms[endpoint.ParmNames[j]] = r.Form[qry][0]
+         j++
       }
    }
 
@@ -1436,6 +1482,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          return
       }
       parms = append(parms,r.Header[header][0]) // TODO array support
+      authparms[endpoint.ParmNames[j]] = r.Header[header][0]
+      j++
    }
 
    Goose.Serve.Logf(5,"Parms with headers: %#v",parms)
@@ -1458,8 +1506,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    }
 
    Goose.Serve.Logf(6,"umrsh=%#v",umrsh)
-
-   resp = endpoint.Handle(parms,umrsh)
 
    outWriter = w
 
@@ -1497,21 +1543,156 @@ gzipcheck:
       hd.Add("Content-Type","application/xml")
    }
 
-   if resp.Status != 0 {
-      for k, v := range resp.Header {
-         hd.Add(k, v)
-      }
-      w.WriteHeader(resp.Status)
+   Goose.Serve.Logf(5,"svc.Access: %d",svc.Access)
+   err = nil
+   if svc.Access != AccessNone {
+      httpstat, authinfo, err = svc.Authorizer.Authorize(endpoint.Path, authparms, r.RemoteAddr, r.TLS, svc.SavePending)
    }
 
+   Goose.Swagger.Logf(5,"Authorization returned HTTP status %d and err %s",httpstat,err)
+   Goose.Serve.Logf(5,"Authorization returned HTTP status %d and err %s",httpstat,err)
+   if err == nil {
+      if svc.Access == AccessAuthInfo || svc.Access == AccessVerifyAuthInfo {
+         resp = endpoint.Handle(parms,umrsh,authinfo)
+      } else {
+         resp = endpoint.Handle(parms,umrsh,nil)
+      }
 
-   if resp.Status != http.StatusNoContent {
-      err = mrsh.Encode(resp.Body)
-      if err!=nil {
-         Goose.Serve.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
-         return
+      if resp.Status != 0 {
+         for k, v := range resp.Header {
+            hd.Add(k, v)
+         }
+         w.WriteHeader(resp.Status)
+      }
+
+
+      if resp.Status != http.StatusNoContent {
+         err = mrsh.Encode(resp.Body)
+         if err!=nil {
+            Goose.Serve.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
+            return
+         }
+      }
+   } else {
+      Goose.Serve.Logf(1,"Authorization failure with HTTP Status %d and error %s", httpstat, err)
+      w.WriteHeader(httpstat)
+      if httpstat != http.StatusNoContent {
+         err = mrsh.Encode(fmt.Sprintf("%s",err))
+         if err!=nil {
+            Goose.Serve.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
+            return
+         }
       }
    }
+}
 
+func (pa PublicAccessT) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {
+   return http.StatusOK, nil, nil
+}
+
+//func (pa PublicAccessT)  GetTLSConfig(AuthRequired bool) (*tls.Config, error) {
+func (pa PublicAccessT)  GetTLSConfig(Access uint8) (*tls.Config, error) {
+   return nil, nil
+/*
+   var err        error
+   var tlsConfig *tls.Config
+
+   Goose.Auth.Logf(6,"authtype: %#v",tls.NoClientCert)
+
+   tlsConfig = &tls.Config{
+      ClientAuth: tls.NoClientCert,
+//      InsecureSkipVerify: true,
+      Certificates: []tls.Certificate{ck.ServerX509KeyPair},
+   }
+
+   Goose.Auth.Logf(5,"X509KeyPair used: %#v",tlsConfig.Certificates[0])
+   tlsConfig.BuildNameToCertificate()
+
+   return tlsConfig, nil
+*/
+}
+
+func (pa PublicAccessT) StartCRLServer(listenAddress string, listener *StoppableListener) error {
+   return nil
+
+/*
+   srvcrl := &http.Server{
+      Addr: listenAddress,
+      Handler: ck.CertKit(),
+   }
+
+   Goose.Auth.Logf(5,"CRL Listen Address: %s",listenAddress)
+   return srvcrl.Serve(listener)
+*/
+
+//   Goose.InitServe.Logf(5,"CRL Listen is serving")
+//   err = http.ListenAndServe(svc.CRLListenAddress,svc.Auth)
+//   if err != nil {
+//      Goose.InitServe.Fatalf(1,"Error serving CRL: %s",err)
+//   }
+
+}
+
+
+func (pa PublicAccessT) GetDNSNames() []string {
+   var hn  string
+   var err error
+   hn, err = os.Hostname()
+   if err != nil {
+      return []string{"localhost"}
+   }
+   return []string{hn}
+}
+
+func (pa PublicAccessT) GetServerCert() *x509.Certificate {
+   return nil
+}
+
+func (pa PublicAccessT) GetServerKey() *rsa.PrivateKey {
+   return nil
+}
+
+func (pa PublicAccessT) GetCACert() *x509.Certificate {
+   return nil
+}
+
+func (pa PublicAccessT) GetCAKey() *rsa.PrivateKey {
+   return nil
+}
+
+func (pa PublicAccessT) GetServerX509KeyPair() tls.Certificate {
+   return tls.Certificate{}
+}
+
+func (pa PublicAccessT) GetCertPool() *x509.CertPool {
+   return nil
+}
+
+func (pa PublicAccessT) ReadCertFromReader(r io.Reader) (*x509.Certificate, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) ReadCertificate(fname string) (*x509.Certificate, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) ReadRsaPrivKeyFromReader(r io.Reader) (*rsa.PrivateKey, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) ReadRsaPrivKey(fname string) (*rsa.PrivateKey, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) ReadDecryptRsaPrivKeyFromReader(r io.Reader) (*rsa.PrivateKey, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) ReadDecryptRsaPrivKey(fname string) (*rsa.PrivateKey, []byte, error) {
+   return nil, nil, nil
+}
+
+func (pa PublicAccessT) LoadUserData(udata map[string]interface{}) error {
+   return nil
 }
 

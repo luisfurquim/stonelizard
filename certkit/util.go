@@ -127,13 +127,16 @@ func (crtkit CertKit) ReadRsaPrivKey(key **rsa.PrivateKey, path string) error {
 }
 
 func (svc CertKit) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+   Goose.Serve.Logf(3,"Certificate revocation list requested by %s",r.RemoteAddr)
    if r.URL.Path == "/rootCA.crl" {
       w.WriteHeader(http.StatusOK)
       w.Header().Set("Content-Type", "application/pkix-crl")
       w.Write([]byte(svc.CACRL))
+      Goose.Serve.Logf(3,"Certificate revocation list sent for %s",r.RemoteAddr)
       return
    }
 
+   Goose.Serve.Logf(3,"Can only serve certificate revocation list %s",r.RemoteAddr)
    w.WriteHeader(http.StatusNotFound)
 }
 
