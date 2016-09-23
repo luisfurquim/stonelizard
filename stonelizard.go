@@ -24,8 +24,6 @@ import (
 //   "path/filepath"
 )
 
-// http://www.hydrogen18.com/blog/stop-listening-http-server-go.html
-
 //Convert the UrlNode field value, from the Service struct, into a string
 func (svc Service) String() string {
    var s string
@@ -69,6 +67,7 @@ func NewListener(l net.Listener) (*StoppableListener, error) {
    return retval, nil
 }
 
+// http://www.hydrogen18.com/blog/stop-listening-http-server-go.html
 //Implements a wrapper on the system accept
 func (sl *StoppableListener) Accept() (net.Conn, error) {
 
@@ -125,7 +124,7 @@ func (svc Service) Close() {
    svc.Listener.Close()
    svc.CRLListener.Stop()
    svc.CRLListener.Close()
-   Goose.Listener.Logf(2,"All listeners closed")
+   Goose.Listener.Logf(3,"All listeners closed")
 }
 
 func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
@@ -1549,9 +1548,8 @@ gzipcheck:
       httpstat, authinfo, err = svc.Authorizer.Authorize(endpoint.Path, authparms, r.RemoteAddr, r.TLS, svc.SavePending)
    }
 
-   Goose.Swagger.Logf(5,"Authorization returned HTTP status %d and err %s",httpstat,err)
-   Goose.Serve.Logf(5,"Authorization returned HTTP status %d and err %s",httpstat,err)
    if err == nil {
+      Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
       if svc.Access == AccessAuthInfo || svc.Access == AccessVerifyAuthInfo {
          resp = endpoint.Handle(parms,umrsh,authinfo)
       } else {
@@ -1692,7 +1690,35 @@ func (pa PublicAccessT) ReadDecryptRsaPrivKey(fname string) (*rsa.PrivateKey, []
    return nil, nil, nil
 }
 
-func (pa PublicAccessT) LoadUserData(udata map[string]interface{}) error {
+func (pa PublicAccessT) Setup(udata map[string]interface{}) error {
+   return nil
+}
+
+func (pa PublicAccessT) LoadUserData() error {
+   return nil
+}
+
+func (pa PublicAccessT) Trust(id string) error {
+   return nil
+}
+
+func (pa PublicAccessT) GetPending() (map[string]interface{}, error) {
+   return map[string]interface{}{}, nil
+}
+
+func (pa PublicAccessT) GetTrusted() (map[string]interface{}, error) {
+   return map[string]interface{}{}, nil
+}
+
+func (pa PublicAccessT) Reject(id string) error {
+   return nil
+}
+
+func (pa PublicAccessT) Drop(id string) error {
+   return nil
+}
+
+func (pa PublicAccessT) Delete(tree, id string) error {
    return nil
 }
 

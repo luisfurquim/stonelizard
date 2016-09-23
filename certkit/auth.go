@@ -6,6 +6,7 @@ import (
    "bytes"
    "net/http"
    "io/ioutil"
+   "crypto/rsa"
    "crypto/tls"
    "crypto/x509"
    "github.com/luisfurquim/stonelizard"
@@ -144,3 +145,56 @@ func (ck *CertKit) StartCRLServer(listenAddress string, listener *stonelizard.St
 func (ck *CertKit) GetDNSNames() []string {
    return ck.ServerCert.DNSNames
 }
+
+func (ck *CertKit) GetServerCert() *x509.Certificate {
+   return ck.ServerCert
+}
+
+func (ck *CertKit) GetServerKey() *rsa.PrivateKey {
+   return ck.ServerKey
+}
+
+func (ck *CertKit) GetCACert() *x509.Certificate {
+   return ck.CACert
+}
+
+func (ck *CertKit) GetCAKey() *rsa.PrivateKey {
+   return ck.CAKey
+}
+
+func (ck *CertKit) GetServerX509KeyPair() tls.Certificate {
+   return ck.ServerX509KeyPair
+}
+
+func (ck *CertKit) GetCertPool() *x509.CertPool {
+   return ck.CertPool
+}
+
+
+
+
+func (ck *CertKit) Trust(id string) error {
+   return os.Rename(fmt.Sprintf("%s%cpending%c%s.crt", ck.Path, os.PathSeparator, os.PathSeparator, id),fmt.Sprintf("%s%cclient%c%s.crt", ck.Path, os.PathSeparator, os.PathSeparator, id))
+}
+
+func (ck *CertKit) GetPending() (map[string]interface{}, error) {
+   return map[string]interface{}{}, nil
+}
+
+func (ck *CertKit) GetTrusted() (map[string]interface{}, error) {
+   return map[string]interface{}{}, nil
+}
+
+func (ck *CertKit) Reject(id string) error {
+   return ck.Delete("pending",id)
+}
+
+func (ck *CertKit) Drop(id string) error {
+   delete(ck.UserCerts,id)
+   return ck.Delete("client",id)
+}
+
+func (ck *CertKit) Delete(tree, id string) error {
+   return os.Remove(fmt.Sprintf("%s%c%s%c%s.crt", ck.Path, os.PathSeparator, tree, os.PathSeparator, id))
+}
+

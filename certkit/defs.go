@@ -24,6 +24,7 @@ type Shaper interface {
 */
 
 type CertKit struct {
+   Path                       string
    ServerCertPem, CACertPem []byte
    ServerCert,    CACert     *x509.Certificate
    ServerKeyPem,  CAKeyPem  []byte

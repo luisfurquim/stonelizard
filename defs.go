@@ -107,7 +107,14 @@ type AuthT interface {
    ReadRsaPrivKey(fname string) (*rsa.PrivateKey, []byte, error)
    ReadDecryptRsaPrivKeyFromReader(r io.Reader) (*rsa.PrivateKey, []byte, error)
    ReadDecryptRsaPrivKey(fname string) (*rsa.PrivateKey, []byte, error)
-   LoadUserData(udata map[string]interface{}) error
+   Setup(udata map[string]interface{}) error
+   LoadUserData() error
+   Trust(id string) error
+   Reject(id string) error
+   Drop(id string) error
+   Delete(tree, id string) error
+   GetPending() (map[string]interface{}, error)
+   GetTrusted() (map[string]interface{}, error)
 }
 
 type EndPointHandler interface {

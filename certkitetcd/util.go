@@ -5,6 +5,8 @@ import (
    "io"
    "os"
    "fmt"
+   "regexp"
+   "strings"
    "net/http"
    "io/ioutil"
    "crypto/rsa"
@@ -12,9 +14,9 @@ import (
    "archive/zip"
    "crypto/x509"
    "encoding/pem"
-   "path/filepath"
-//   "github.com/luisfurquim/etcdconfig"
-//   etcd "github.com/coreos/etcd/client"
+   "golang.org/x/net/context"
+   "github.com/luisfurquim/etcdconfig"
+   etcd "github.com/coreos/etcd/client"
 )
 
 //Load in memory and decodes the certificate from the reader
@@ -23,18 +25,32 @@ func (crtkit CertKit) ReadCertFromReader(r io.Reader) (*x509.Certificate, []byte
    var pembuf []byte
    var cert    *x509.Certificate
 
+   Goose.Loader.Logf(5,"Will read certificate")
+
    pembuf, err = ioutil.ReadAll(r)
    if err != nil {
       Goose.Loader.Logf(1,"Failed reading cert %s",err)
       return nil, nil, err
    }
 
+   Goose.Loader.Logf(5,"Certificate was read into memory buffer")
+
    block, _  := pem.Decode(pembuf)
+
+   if block == nil {
+      Goose.Loader.Logf(6,"%s: [%s]",ErrorBadPEMBlock,pembuf)
+      return nil, nil, ErrorBadPEMBlock
+   }
+
+   Goose.Loader.Logf(5,"PEM was decoded")
+
    cert, err  = x509.ParseCertificate(block.Bytes)
    if err != nil {
       Goose.Loader.Logf(1,"Failed parsing cert %s",err)
       return nil, nil, err
    }
+
+   Goose.Loader.Logf(5,"Certificate was parsed")
 
    return cert, pembuf, nil
 }
@@ -64,14 +80,14 @@ func (crtkit CertKit) ReadRsaPrivKeyFromReader(r io.Reader) (*rsa.PrivateKey, []
 
    pembuf, err = ioutil.ReadAll(r)
    if err != nil {
-      Goose.Loader.Logf(0,"Failed reading Key %s",err)
+      Goose.Loader.Logf(1,"Failed reading Key %s",err)
       return nil, nil, err
    }
 
    block, _  := pem.Decode(pembuf)
    key, err  = x509.ParsePKCS1PrivateKey(block.Bytes)
    if err != nil {
-      Goose.Loader.Logf(0,"Failed parsing key %s",err)
+      Goose.Loader.Logf(1,"Failed parsing key %s",err)
       return nil, nil, err
    }
 
@@ -109,6 +125,11 @@ func (crtkit CertKit) ReadDecryptRsaPrivKeyFromReader(r io.Reader) (*rsa.Private
    }
 
    block, _ = pem.Decode(pembuf)
+
+   if block == nil {
+      Goose.Loader.Logf(1,"%s: [%s]",ErrorBadPEMBlock,pembuf)
+      return nil, nil, ErrorBadPEMBlock
+   }
 
    plainkey, err = x509.DecryptPEMBlock(block,[]byte{})
    Goose.Loader.Logf(1,"DecryptPEMBlock: %s",plainkey)
@@ -225,30 +246,175 @@ func NewFromCK(path string) (*CertKit, error) {
    return &ck, nil
 }
 
-//func (ck *CertKit) LoadUserData(etcdcli etcd.Client, key string) error {
-func (ck *CertKit) LoadUserData(udata map[string]interface{}) error {
+func (ck *CertKit) Setup(udata map[string]interface{}) error {
+   if _, ok := udata["etcd"]; !ok {
+      Goose.Loader.Logf(1,"%s", ErrorNoEtcdHandler)
+      return ErrorNoEtcdHandler
+   }
+
+   if _, ok := udata["etcdkey"]; !ok {
+      Goose.Loader.Logf(1,"%s", ErrorNoEtcdKey)
+      return ErrorNoEtcdKey
+   }
+
+   switch udata["etcd"].(type) {
+      case etcd.Client:
+         ck.Etcdcli = udata["etcd"].(etcd.Client)
+      default:
+         Goose.Loader.Logf(1,"%s", ErrorBadEtcdHandler)
+         return ErrorBadEtcdHandler
+   }
+
+   switch udata["etcdkey"].(type) {
+      case string:
+         ck.Etcdkey = udata["etcdkey"].(string)
+      default:
+         Goose.Loader.Logf(1,"%s", ErrorBadEtcdKey)
+         return ErrorBadEtcdKey
+   }
+
+
+   ck.etcdCertKeyRE   = regexp.MustCompile("^/" + ck.Etcdkey + "/trusted/" + "(.+)_([0-9a-fA-F]+)/cert$")
+   ck.etcdDeleteKeyRE = regexp.MustCompile("^/" + ck.Etcdkey + "/trusted/" + "(.+)_([0-9a-fA-F]+)$")
+
+   return nil
+}
+
+
+func (ck *CertKit) LoadUserData() error {
    var err error
-   err = filepath.Walk(fmt.Sprintf("%s%c%s",ck.Path, os.PathSeparator,"client"), func (path string, f os.FileInfo, err error) error {
-      var ClientCert *x509.Certificate
+   var ClientCert *x509.Certificate
+   var ClientCertRaw interface{}
+   var etcdData interface{}
+   var usrKey string
+   var usrData interface{}
 
-      if (len(path)<4) || (path[len(path)-4:]!=".crt") {
-         return nil
-      }
-
-      ClientCert, _, err = ck.ReadCertificate(path)
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey)
+   if err != nil {
+      _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), ck.Etcdkey, "", &etcd.SetOptions{Dir:true})
       if err != nil {
-         Goose.Loader.Logf(1,"Failed reading %s file: %s", path, err)
+         Goose.Loader.Logf(1,"Error creating creating base diretory (%s): %s",ck.Etcdkey,err)
          return err
       }
 
-      if ck.UserCerts == nil {
-         ck.UserCerts = map[string]*x509.Certificate{ClientCert.Subject.CommonName:ClientCert}
-      } else {
-         ck.UserCerts[ClientCert.Subject.CommonName] = ClientCert
+      _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), ck.Etcdkey + "/trusted", "", &etcd.SetOptions{Dir:true})
+      if err != nil {
+         Goose.Loader.Logf(1,"Error creating creating trusted users base diretory (%s): %s",ck.Etcdkey + "/trusted",err)
+         return err
       }
 
-     return nil
+      _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), ck.Etcdkey + "/pending", "", &etcd.SetOptions{Dir:true})
+      if err != nil {
+         Goose.Loader.Logf(1,"Error creating creating pending users base diretory (%s): %s",ck.Etcdkey + "/pending",err)
+         return err
+      }
+   }
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey + "/pending")
+   if err != nil {
+      _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), ck.Etcdkey + "/pending", "", &etcd.SetOptions{Dir:true})
+      if err != nil {
+         Goose.Loader.Logf(1,"Error creating creating pending users base diretory (%s): %s",ck.Etcdkey + "/pending",err)
+         return err
+      }
+   }
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey + "/trusted")
+   if err != nil {
+      _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), ck.Etcdkey + "/trusted", "", &etcd.SetOptions{Dir:true})
+      if err != nil {
+         Goose.Loader.Logf(1,"Error creating creating trusted users base diretory (%s): %s",ck.Etcdkey + "/trusted",err)
+         return err
+      }
+   }
+
+   ck.UserCerts = map[string]*UserDB{}
+
+   if etcdData != nil {
+      for usrKey, usrData = range etcdData.(map[string]interface{}) {
+         switch usrData.(type) {
+            case (map[string]interface{}):
+               ClientCertRaw = usrData.(map[string]interface{})["cert"]
+               switch ClientCertRaw.(type) {
+                  case string:
+                     ClientCert, _, err = ck.ReadCertFromReader(strings.NewReader(ClientCertRaw.(string)))
+                     if err == nil {
+                        ck.UserCerts[usrKey] = &UserDB{Cert: ClientCert}
+                     } else {
+                        Goose.Loader.Logf(1,"Error decoding certificate for %s: %s", usrKey, err)
+                     }
+                  default:
+                     Goose.Loader.Logf(1,"Error reading certificate for %s: %s", usrKey, err)
+               }
+            default:
+               Goose.Loader.Logf(1,"Error reading user data for %s: %s", usrKey, err)
+         }
+      }
+   }
+
+   etcdconfig.OnUpdateTree(ck.Etcdcli, ck.Etcdkey + "/trusted", func(key string, val interface{}, action string) {
+      Goose.Loader.Logf(2,"Update (%s) on %s|", action, key)
+      Goose.Loader.Logf(5,"Update (%s) on %s: %#v", action, key, val)
+      //key = key[len(ck.Etcdkey) + 10:]
+      Goose.Loader.Logf(2,"Update (%s) on map key %s|", action, key)
+      switch action {
+         case "set":
+            idParts := ck.etcdCertKeyRE.FindStringSubmatch(key)
+            if len(idParts) > 0 {
+               key = idParts[1] + "_" + idParts[2]
+               ClientCert, _, err = ck.ReadCertFromReader(strings.NewReader(val.(string)))
+               Goose.Loader.Logf(2,"certificate for %s was decoded", idParts[1])
+               if err == nil {
+                  if _, ok := ck.UserCerts[key]; ok {
+                     ck.UserCerts[key].Cert = ClientCert
+                     Goose.Loader.Logf(2,"certificate for %s was updated", idParts[1])
+                  } else {
+                     ck.UserCerts[key] = &UserDB{Cert: ClientCert}
+                     Goose.Loader.Logf(2,"certificate for %s was created", idParts[1])
+                  }
+               } else {
+                  Goose.Loader.Logf(1,"Error decoding certificate for %s: %s", key, err)
+               }
+            }
+
+         case "delete":
+            idParts := ck.etcdDeleteKeyRE.FindStringSubmatch(key)
+            if len(idParts) > 0 {
+               key = idParts[1] + "_" + idParts[2]
+               delete(ck.UserCerts,key)
+               Goose.Loader.Logf(2,"certificate for %s was deleted", key)
+            }
+      }
    })
+
+/*
+   _, etcdData, err = etcdconfig.GetConfig(etcdhandle, etcdkey + "/pending")
+   if err != nil {
+      Goose.Loader.Logf(1,"Error retrieving trusted users certificates: %s", err)
+      return err
+   }
+
+   ck.PendingCerts = map[string]UserDB{}
+   for usrKey, usrData = range etcdData {
+      switch usrData.(type) {
+         case (map[string]interface{}):
+            ClientCertRaw = usrData.(map[string]interface{})["cert"]
+            switch ClientCertRaw.(type) {
+               case string:
+                  ClientCert, _, err = ck.ReadCertFromReader(strings.NewReader(ClientCertRaw.(string)))
+                  if err == nil {
+                     ck.PendingCerts[usrKey] = UserDB{Cert: ClientCert}
+                  } else {
+                     Goose.Loader.Logf(1,"Error decoding pending certificate for %s: %s", usrKey, err)
+                  }
+               default:
+                  Goose.Loader.Logf(1,"Error reading pending certificate for %s: %s", usrKey, err)
+            }
+         default:
+            Goose.Loader.Logf(1,"Error reading pending user data for %s: %s", usrKey, err)
+      }
+   }
+*/
 
    return err
 }

@@ -2,19 +2,29 @@ package certkitetcd
 
 import (
 //   "os"
-//   "fmt"
+   "fmt"
    "bytes"
+   "errors"
    "net/http"
 //   "io/ioutil"
    "crypto/tls"
    "crypto/rsa"
    "crypto/x509"
+   "encoding/pem"
+   "golang.org/x/net/context"
    "github.com/luisfurquim/stonelizard"
+   "github.com/luisfurquim/etcdconfig"
+   etcd "github.com/coreos/etcd/client"
 )
+
+func certKey(cert *x509.Certificate) string {
+   return fmt.Sprintf("%s_%2x", cert.EmailAddresses[0], cert.AuthorityKeyId)
+}
 
 func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {
    var cert       *x509.Certificate
-   var UserCert   *x509.Certificate
+   var User       *UserDB
+   var CertKey     string
    var found       bool
    var ok          bool
    var commonName  string
@@ -24,8 +34,9 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
    for _, cert = range TLS.PeerCertificates {
       Goose.Auth.Logf(6,"Peer certificate: %#v",cert)
       Goose.Auth.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
-      if UserCert, ok = ck.UserCerts[cert.Subject.CommonName]; ok {
-         if bytes.Equal(UserCert.Raw,cert.Raw) {
+      CertKey = certKey(cert)
+      if User, ok = ck.UserCerts[CertKey]; ok {
+         if bytes.Equal(User.Cert.Raw,cert.Raw) {
             found = true
             break
          } else {
@@ -171,5 +182,172 @@ func (ck *CertKit) GetServerX509KeyPair() tls.Certificate {
 func (ck *CertKit) GetCertPool() *x509.CertPool {
    return ck.CertPool
 }
+
+
+// Stores the certificate in the authorization pending subtree
+func (ck *CertKit) SavePending(cert *x509.Certificate) error {
+   var err error
+   var CertKey string
+   var Pem string
+   var tgtpath string
+
+   CertKey = certKey(cert)
+   Goose.Auth.Logf(3,"User certificate of %s not authorized", CertKey)
+   Goose.Auth.Logf(6,"Certificate is %#v", cert)
+
+   tgtpath = ck.Etcdkey + "/pending/" + CertKey
+
+   _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), tgtpath, "", &etcd.SetOptions{Dir:true})
+   if err != nil {
+      Goose.Auth.Logf(1,"Error creating diretory for pending certificate (%s): %s",tgtpath,err)
+      return err
+   }
+
+   Pem = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}))
+   Goose.Auth.Logf(6,"Pem Certificate is %#v", Pem)
+   err = etcdconfig.SetKey(ck.Etcdcli, tgtpath + "/cert", Pem)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error saving pending certificate (%s): %s",tgtpath,err)
+      return err
+   }
+
+   return err
+}
+
+//Transfer a user certificate from the pending subtree to the trusted subtree (so, enabling this user accesses)
+func (ck *CertKit) Trust(id string) error {
+   var err error
+   var srcpath string
+   var tgtpath string
+   var etcdData interface{}
+
+   srcpath = ck.Etcdkey + "/pending/" + id
+   tgtpath = ck.Etcdkey + "/trusted/" + id
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, srcpath + "/cert")
+   if err != nil {
+      Goose.Auth.Logf(1,"Error retrieving pending user certificate for %s: %s", id, err)
+      return err
+   }
+
+   Goose.Auth.Logf(6,"etcddata %s: %#v", id, etcdData)
+
+   _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), tgtpath, "", &etcd.SetOptions{Dir:true})
+   if err != nil {
+      Goose.Auth.Logf(1,"Error setting configuration, creating diretory (%s): %s",tgtpath,err)
+      return err
+   }
+
+   err = etcdconfig.SetKey(ck.Etcdcli, tgtpath + "/cert", etcdData.(string))
+   if err != nil {
+      Goose.Auth.Logf(1,"Error saving pending user certificate on trusted subtree for %s: %s", id, err)
+      return err
+   }
+
+   err = etcdconfig.DeleteConfig(ck.Etcdcli, srcpath)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error deleting pending user certificate for %s: %s", id, err)
+      return err
+   }
+
+   return nil
+}
+
+
+//Remove a user certificate from the pending subtree (so, rejecting this user accesses)
+func (ck *CertKit) Reject(id string) error {
+   return ck.Delete("pending",id)
+}
+
+//Remove a user certificate from the trusted subtree (so, rejecting this user accesses)
+func (ck *CertKit) Drop(id string) error {
+   return ck.Delete("trusted",id)
+}
+
+//Remove a user certificate from the trusted subtree (so, rejecting this user accesses)
+func (ck *CertKit) Delete(tree, id string) error {
+   var err error
+   var srcpath string
+
+   srcpath = ck.Etcdkey + "/" + tree + "/" + id
+
+   err = etcdconfig.DeleteConfig(ck.Etcdcli, srcpath)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error deleting pending user certificate for %s: %s", id, err)
+      return err
+   }
+
+   return nil
+}
+
+
+//List certificates from the pending subtree
+func (ck *CertKit) GetPending() (map[string]interface{}, error) {
+   var err error
+   var etcdData interface{}
+
+   if ck.Etcdcli == nil {
+      err = errors.New("Error no etcd client initialized")
+      Goose.Auth.Logf(1,"%s",err)
+      return nil, err
+   }
+
+   if ck.Etcdkey == "" {
+      err = errors.New("Error no etcd key provided")
+      Goose.Auth.Logf(1,"%s", err)
+      return nil, err
+   }
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey)
+   Goose.Auth.Logf(5,"etcdkey: %#v", etcdData)
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey + "/pending")
+   if err != nil {
+      Goose.Auth.Logf(1,"Error retrieving pending users certificates: %s", err)
+      return nil, err
+   }
+
+   if etcdData == nil {
+      return map[string]interface{}{}, nil
+   }
+
+   return etcdData.(map[string]interface{}), nil
+}
+
+
+
+//List certificates from the trusted subtree
+func (ck *CertKit) GetTrusted() (map[string]interface{}, error) {
+   var err error
+   var etcdData interface{}
+
+   if ck.Etcdcli == nil {
+      err = errors.New("Error no etcd client initialized")
+      Goose.Auth.Logf(1,"%s",err)
+      return nil, err
+   }
+
+   if ck.Etcdkey == "" {
+      err = errors.New("Error no etcd key provided")
+      Goose.Auth.Logf(1,"%s", err)
+      return nil, err
+   }
+
+   _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey + "/trusted")
+   Goose.Auth.Logf(5,"etcdkey: %#v", etcdData)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error retrieving trusted users certificates: %s", err)
+      return nil, err
+   }
+
+   if etcdData == nil {
+      return map[string]interface{}{}, nil
+   }
+
+   return etcdData.(map[string]interface{}), nil
+}
+
+
+
 
 

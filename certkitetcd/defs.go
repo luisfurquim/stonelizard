@@ -2,12 +2,17 @@ package certkitetcd
 
 import (
    "errors"
+   "regexp"
    "crypto/tls"
    "crypto/rsa"
    "crypto/x509"
    "github.com/luisfurquim/goose"
    etcd "github.com/coreos/etcd/client"
 )
+
+type UserDB struct {
+   Cert *x509.Certificate
+}
 
 type CertKit struct {
    Etcdcli                    etcd.Client
@@ -19,8 +24,11 @@ type CertKit struct {
    ServerKey,     CAKey      *rsa.PrivateKey
    CACRL                    []byte
    CertPool                  *x509.CertPool
-   UserCerts      map[string]*x509.Certificate
+   UserCerts      map[string]*UserDB
+   PendingCerts   map[string]*UserDB
    ServerX509KeyPair          tls.Certificate
+   etcdCertKeyRE             *regexp.Regexp
+   etcdDeleteKeyRE           *regexp.Regexp
 }
 
 
@@ -35,4 +43,9 @@ var Goose  CertkitG
 
 var ErrorCertsMustHaveKeys = errors.New("Either provide both certificate and key or none of them")
 var ErrorUnauthorized      = errors.New("Unauthorized access attempt")
+var ErrorNoEtcdHandler     = errors.New("No etcd handler provided")
+var ErrorNoEtcdKey         = errors.New("No etcd key provided")
+var ErrorBadEtcdHandler    = errors.New("Bad etcd handler provided")
+var ErrorBadEtcdKey        = errors.New("Bad etcd key provided")
+var ErrorBadPEMBlock       = errors.New("Bad PEM block")
 
