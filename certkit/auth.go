@@ -178,11 +178,50 @@ func (ck *CertKit) Trust(id string) error {
 }
 
 func (ck *CertKit) GetPending() (map[string]interface{}, error) {
-   return map[string]interface{}{}, nil
+   var err error
+   var resp map[string]interface{}
+   var names []string
+   var fh *os.File
+   var buf []byte
+
+   resp = map[string]interface{}{}
+
+   fh, err = os.Open(fmt.Sprintf("%s%cpending", ck.Path, os.PathSeparator))
+   if err != nil {
+      Goose.Auth.Logf(1,"Error opening pending directory (%s%cpending): %s",ck.Path,os.PathSeparator,err)
+      return nil, err
+   }
+
+   names, err = fh.Readdirnames(-1)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error reading pending directory (%s%cpending): %s",ck.Path,os.PathSeparator,err)
+      return nil, err
+   }
+
+   for _, k := range names {
+      if (len(k)>4) && (k[len(k)-4:]==".crt") {
+         buf, err = ioutil.ReadFile(fmt.Sprintf("%s%cpending%c%s",ck.Path,os.PathSeparator,os.PathSeparator,k))
+         if err != nil {
+            Goose.Auth.Logf(1,"Error reading pending certificate (%s%cpending%c%s): %s",ck.Path,os.PathSeparator,os.PathSeparator,k,err)
+            return nil, err
+         }
+         resp[k[:len(k)-4]] = string(buf)
+      }
+   }
+
+   return resp, nil
 }
 
 func (ck *CertKit) GetTrusted() (map[string]interface{}, error) {
-   return map[string]interface{}{}, nil
+   var resp map[string]interface{}
+
+   resp = map[string]interface{}{}
+
+   for k, v := range ck.UserCerts {
+      resp[k] = v
+   }
+
+   return resp, nil
 }
 
 func (ck *CertKit) Reject(id string) error {
