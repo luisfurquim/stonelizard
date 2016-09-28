@@ -112,7 +112,8 @@ type ResearchT struct {
 
 
 
-// For example simplicity, we made the Service struct satisfy both the EndPointHandler and Shaper interfaces...
+// For example simplicity, we made the Service struct satisfy both the EndPointHandler and
+// Shaper interfaces...
 func (s Service) GetConfig() (stonelizard.Shaper, error) {
    return s, nil
 }
@@ -143,7 +144,8 @@ func (s Service) CertKit() stonelizard.AuthT {
 // access tag was set with the value verifyauthinfo, the certificate CA chain was already verified)
 func (s *Service) NewResearch(ResearchType int, User string, trackId string, files []*multipart.FileHeader, authinfo *x509.Certificate) stonelizard.Response {
 
-   // Do whatever your application needs to do in order to create a new research in your system, for example:
+   // Do whatever your application needs to do in order to create a new research in your system,
+   // for example:
    // a) store data in a persistent storage
    // b) set the newId local variable with the ID of the recently created research
    // c) authinfo may be used to log who created the research
@@ -158,7 +160,8 @@ func (s *Service) NewResearch(ResearchType int, User string, trackId string, fil
    }
 
    return stonelizard.Response{
-      // This HTTP status code to return when successful has its custom message defined by the 'accepted' tag
+      // This HTTP status code to return when successful has its custom message defined by
+      // the 'accepted' tag
       Status: http.StatusAccepted,
       Body: newId, // an int, as defined by the data type of the Service.newResearch field
    }
@@ -198,7 +201,8 @@ func (s *Service) DropResearch(Id int, trackId string, authinfo *x509.Certificat
 // was declared just to illustrate it is optional
 func (s *Service) GetResearch(Id int, trackId string) stonelizard.Response {
 
-   // Do whatever your application needs to do in order to retrieve a research from your system, for example:
+   // Do whatever your application needs to do in order to retrieve a research from your system,
+   // for example:
    // a) get data from a persistent storage
    // b) trackId may be used to help tracking log messages from the same request for debugging
 
