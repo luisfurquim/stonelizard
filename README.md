@@ -18,7 +18,10 @@ type Service struct {
    // 4. allowGzip: if true and the client request compression, stonelizard will automatically compress HTTP responses
    // 5. enableCORS: if true makes stonelizard provide CORS headers when the client requests CORS INFO through the OPTIONS HTTP method
    // 6. proto: either use http or https, other protocols, like ws and wss are in my TODO list, but don't expect it soon
-   // 7. access: determines the level of authentication required, but it is not handled by Stonelizard itself. Instead, it is passed to the AuthT interface to handle it
+   // 7. access: determines the level of authentication required, but it is not handled by Stonelizard itself. Instead, it is passed to the AuthT interface to handle it.
+   //    Valid values are 'none', 'auth', 'authinfo', 'verifyauth' and 'verifyauthinfo'. The 'authinfo' and 'verifyauthinfo' should work exact like 'auth' and 'verifyauth' but
+   //    the information returned by the Authorize method is passed to the method that handles the operation requested. But we left the exact handle of these parameters
+   //    to the object that implements the AuthT interface and so, it is possible that some implementation have very different behavior.
    root    stonelizard.Void `root:"/myservice/" consumes:"application/json" produces:"application/json" allowGzip:"true" enableCORS:"true" proto:"https" access:"verifyauthinfo"`
 
    // Optional fields. Reserved names. Provides service information, the tags are used by the automatic swagger.json generator.
