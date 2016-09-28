@@ -72,6 +72,7 @@ As the name implies, this object makes no authentication at all, allowing anyone
 that provide authentication using x509 certificates. The first one, certkit, handles the certificates stored in the filesystem. The second, certkitetcd, handles certificates
 stored in an etcd database. Feel free to use them or develop your own authentication system.
 
+Calling the service with a path '/swagger.json' retrieves an automatically generated swagger.json specification of the service.
 
 ## Example:
 
