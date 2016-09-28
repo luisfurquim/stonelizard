@@ -137,9 +137,10 @@ func (s Service) CertKit() stonelizard.AuthT {
 
 
 // The Service.NewResearch method is called when the Service.newResearch operation is requested.
-// According to what was declared in the Service struct, 'ResearchType' and 'User' are parameters passed in the REST path, 'trackId' is a parameter passed
-// through HTTP header, 'files' holds any upload file and authinfo contains the certificate provided by the authenticated client (as the access tag was set
-// with the value verifyauthinfo, the certificate CA chain was already verified)
+// According to what was declared in the Service struct, 'ResearchType' and 'User' are parameters
+// passed in the REST path, 'trackId' is a parameter passed through HTTP header, 'files' holds any
+// upload file and authinfo contains the certificate provided by the authenticated client (as the
+// access tag was set with the value verifyauthinfo, the certificate CA chain was already verified)
 func (s *Service) NewResearch(ResearchType int, User string, trackId string, files []*multipart.FileHeader, authinfo *x509.Certificate) stonelizard.Response {
 
    // Do whatever your application needs to do in order to create a new research in your system, for example:
@@ -157,18 +158,21 @@ func (s *Service) NewResearch(ResearchType int, User string, trackId string, fil
    }
 
    return stonelizard.Response{
-      Status: http.StatusAccepted, // This HTTP status code to return when successful has its custom message defined by the 'accepted' tag
+      // This HTTP status code to return when successful has its custom message defined by the 'accepted' tag
+      Status: http.StatusAccepted,
       Body: newId, // an int, as defined by the data type of the Service.newResearch field
    }
 }
 
 // The Service.DropResearch method is called when the Service.dropResearch operation is requested.
-// According to what was declared in the Service struct, 'Id' is a parameter passed in the REST path, 'trackId' is a parameter passed
-// through HTTP header and authinfo contains the certificate provided by the authenticated client (as the access tag was set
-// with the value verifyauthinfo, the certificate CA chain was already verified)
+// According to what was declared in the Service struct, 'Id' is a parameter passed in the REST
+// path, 'trackId' is a parameter passed through HTTP header and authinfo contains the certificate
+// provided by the authenticated client (as the access tag was set with the value verifyauthinfo,
+// the certificate CA chain was already verified)
 func (s *Service) DropResearch(Id int, trackId string, authinfo *x509.Certificate) stonelizard.Response {
 
-   // Do whatever your application needs to do in order to remove a research from your system, for example:
+   // Do whatever your application needs to do in order to remove a research from your system,
+   // for example:
    // a) remove data from a persistent storage
    // b) authinfo may be used to log who removed the research
    // c) trackId may be used to help tracking log messages from the same request for debugging
@@ -189,8 +193,9 @@ func (s *Service) DropResearch(Id int, trackId string, authinfo *x509.Certificat
 
 
 // The Service.GetResearch method is called when the Service.getResearch operation is requested.
-// According to what was declared in the Service struct, 'Id' is a parameter passed in the REST path, 'trackId' is a parameter passed
-// through HTTP header and, this time, no authinfo was declared just to illustrate it is optional
+// According to what was declared in the Service struct, 'Id' is a parameter passed in the REST
+// path, 'trackId' is a parameter passed through HTTP header and, this time, no authinfo parameter
+// was declared just to illustrate it is optional
 func (s *Service) GetResearch(Id int, trackId string) stonelizard.Response {
 
    // Do whatever your application needs to do in order to retrieve a research from your system, for example:
