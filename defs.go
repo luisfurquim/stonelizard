@@ -11,7 +11,9 @@ import (
    "crypto/tls"
    "crypto/x509"
    "mime/multipart"
+   "golang.org/x/net/websocket"
    "github.com/luisfurquim/goose"
+   "github.com/luisfurquim/strtree"
 )
 
 type Void struct{}
@@ -51,20 +53,32 @@ type gzHttpResponseWriter struct {
    ResponseWriter
 }
 
+type WSocketEventRegistry []*websocket.Conn
+
+type HandleHttpFn func ([]interface{}, Unmarshaler, interface{}) Response // Operation handler function, it calls the method defined by the application
+type HandleWsFn   func ([]interface{}, Unmarshaler) Response // Operation handler function, it calls the method defined by the application
+
+type WSocketOperation struct {
+   ParmNames     []string          // List of parameter names
+   CallByRef       bool            // Flags methods whoose receiver is a pointer
+   Method          reflect.Method  // Method to handle the operation
+}
 
 type UrlNode struct {
-   Path         string     // The URL path with input parameters
-   produces     string     // The possible mime-types produced by the operation for output
-   consumes     string     // The possible mime-types required by the operation for input
-   Proto      []string
-   allowGzip    bool       // If true AND the client requests with the HTTP header, then we gzip the communication
-   Headers    []string     // List of HTTP header parameters required by the operation for input
-   Query      []string     // List of query parameters required by the operation for input
-   Body       []string     // List of HTTP body parameters required by the operation for input
-   ParmNames  []string     // Complete list of parameter names (from path, headers, query and body)
-   Handle       func ([]string, Unmarshaler, interface {}) Response // Operation handler function, it calls the method defined by the application
+   Path               string       // The URL path with input parameters
+   produces           string       // The possible mime-types produced by the operation for output
+   consumes           string       // The possible mime-types required by the operation for input
+   Proto            []string       // Valid protocols: http, https, ws, wss
+   allowGzip          bool         // If true AND the client requests with the HTTP header, then we gzip the communication
+   Headers          []string       // List of HTTP header parameters required by the operation for input
+   Query            []string       // List of query parameters required by the operation for input
+   Body             []string       // List of HTTP body parameters required by the operation for input
+   ParmNames        []string       // Complete list of parameter names (from path, headers, query and body)
+   Handle             HandleHttpFn
+   WSocketOperations *strtree.Node // If this.Proto contains ws | wss, then store here the suboperations defined by the methods of the type returned by the main handlers
+   WSocketEvents     *strtree.Node // If this.Proto contains ws | wss, then store here the events defined by the event fields of the type returned by the main handlers
 /*
-   Access       uint8      // Defined in the access tag.
+   Access          uint8   // Defined in the access tag.
                            // Possible values:
                            //    'none'=public unauthenticated access
                            //    'auth'=authenticated access (through the AuthT interface)
@@ -254,9 +268,12 @@ type SwaggerOperationT struct {
    // This definition overrides any declared top-level security.
    // To remove a top-level security declaration, an empty array can be used.
    Security map[string]SwaggerSecurityT `json:"security,omitempty"`
+
+   // Custom stonelizard extension. Specifies suboperations. Used for websocket operations
+   XWebSocket map[string]*SwaggerOperationT `json:"x-wsoperations,omitempty"`
 }
 
-type SwaggerPathT map[string]SwaggerOperationT
+type SwaggerPathT map[string]*SwaggerOperationT
 /*
 struct {
    // A definition of a GET operation on this path.
@@ -827,10 +844,12 @@ const (
 
 var voidType = reflect.TypeOf(Void{})
 var float64Type = reflect.TypeOf(float64(0))
-//var MaxUploadMemory int64 = 1024
 var MaxUploadMemory int64 = 16 * 1024 * 1024
+var gorootRE *regexp.Regexp
+var gosrcRE *regexp.Regexp
 
 var ErrorStopped = errors.New("Stop signal received")
+var ErrorParmListSyntax = errors.New("Syntax error on parameter list")
 var ErrorDescriptionSyntax = errors.New("Syntax error on response description")
 var ErrorInvalidNilParam = errors.New("Syntax error nil parameter not allowed in this context")
 var ErrorWrongParameterCount = errors.New("Wrong parameter count")
@@ -839,7 +858,14 @@ var ErrorMissingRequiredHTTPHeader = errors.New("Missing required HTTP header")
 var ErrorMissingRequiredQueryField = errors.New("Error missing required query field")
 var ErrorMissingRequiredPostBodyField = errors.New("Error missing required post body field")
 var ErrorWrongAuthorizerReturnValues = errors.New("Error wrong authorizer return values")
-
+var ErrorInvalidProtocol = errors.New("Invalid protocol")
+var ErrorMixedProtocol = errors.New("Mixed http/https with ws/wss")
+var ErrorWrongHandlerKind = errors.New("Wrong handler kind")
+var WrongParameterLength = errors.New("Wrong parameter length")
+var WrongParameterType = errors.New("Wrong parameter type")
+var MapParameterEncodingError = errors.New("Map parameter encoding error")
+var ErrorInvalidType = errors.New("Invalid type")
+var ErrorConversionOverflow = errors.New("Conversion overflow")
 
 type StonelizardG struct {
    Listener     goose.Alert
@@ -854,3 +880,4 @@ type StonelizardG struct {
 }
 
 var Goose StonelizardG
+var WebSocketResponse Response

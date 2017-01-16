@@ -12,6 +12,7 @@ import (
    "strconv"
    "strings"
    "reflect"
+   "runtime"
 //   "net/url"
    "net/http"
 //   "io/ioutil"
@@ -22,7 +23,14 @@ import (
    "encoding/json"
    "compress/gzip"
 //   "path/filepath"
+   "golang.org/x/net/websocket"
+   "github.com/luisfurquim/strtree"
 )
+
+func init() {
+   gorootRE = regexp.MustCompile("^\\s+" + os.Getenv("GOROOT") + "[^\\s]+\\.go:[0-9]+")
+   gosrcRE = regexp.MustCompile("^\\s+[^\\s]+\\.go:[0-9]+")
+}
 
 //Convert the UrlNode field value, from the Service struct, into a string
 func (svc Service) String() string {
@@ -126,6 +134,84 @@ func (svc Service) Close() {
    svc.CRLListener.Close()
    Goose.Listener.Logf(3,"All listeners closed")
 }
+
+func GetWebSocketSpec(field reflect.StructField, WSMethodName string, WSMethod reflect.Method) (*SwaggerOperationT, error) {
+   var operation            *SwaggerOperationT
+   var err                   error
+   var inTag                 string
+   var tags                []string
+   var parmName              string
+   var SwaggerParameter     *SwaggerParameterT
+   var parmcount             int
+   var responses  map[string]SwaggerResponseT
+
+   inTag = field.Tag.Get("in")
+   tags  = strings.Split(field.Tag.Get("tags"),",")
+   if len(tags) == 0 {
+      tags = nil
+   }
+
+   if (len(tags) == 1) || (tags[0]=="") {
+      tags = nil
+   }
+
+   responses, _, err = getResponses(field, field.Type)
+   if err != nil {
+      return nil, err
+   }
+
+   operation = &SwaggerOperationT{
+      Tags:        tags,
+      Description: field.Tag.Get("doc"),
+      OperationId: WSMethodName,
+      //Consumes []string `json:"consumes,omitempty"`
+      //Produces []string `json:"produces,omitempty"`
+      Parameters: []SwaggerParameterT{},
+      //Responses:   map[string]SwaggerResponseT{},
+      //Schemes:  []string{"ocpp"},
+      Responses: responses, // callID , status, response
+   }
+
+   for parmcount, parmName = range strings.Split(strings.Trim(inTag,""),",") {
+      if parmName=="" {
+         Goose.Swagger.Logf(1,"%s",ErrorParmListSyntax)
+         return nil, ErrorInvalidType
+      }
+
+      SwaggerParameter, err = GetSwaggerType(WSMethod.Type.In(parmcount+1))
+      if err != nil {
+         return nil, err
+      }
+
+      if SwaggerParameter == nil {
+         return nil, ErrorInvalidNilParam
+      }
+
+      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
+         Goose.New.Logf(1,"%s: sch_req:%#v %#v",parmName,SwaggerParameter.Schema.Required,SwaggerParameter)
+         return nil, ErrorInvalidParameterType
+      }
+
+      xkeytype := ""
+      if SwaggerParameter.Schema != nil {
+         xkeytype = SwaggerParameter.Schema.XKeyType
+      }
+
+      operation.Parameters = append(
+         operation.Parameters,
+         SwaggerParameterT{
+            Name: parmName,
+            In:   "path",
+            Required: true,
+            Type: SwaggerParameter.Schema.Type,
+            XKeyType: xkeytype,
+            Format: SwaggerParameter.Format,
+         })
+   }
+
+   return operation, nil
+}
+
 
 func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var item, subItem *SwaggerParameterT
@@ -256,6 +342,12 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
       Goose.Swagger.Logf(6,"Got struct: %#v",item)
       for i=0; i<parm.NumField(); i++ {
          field = parm.Field(i)
+
+         if field.Name[:1] == strings.ToLower(field.Name[:1]) {
+            continue // Unexported field
+         }
+
+
          Goose.Swagger.Logf(6,"Struct field: %s",field.Name)
          doc   = field.Tag.Get("doc")
          if doc != "" {
@@ -265,13 +357,15 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
             description = nil
          }
 
+         item.Schema.Required = append(item.Schema.Required,field.Name)
+
          subItem, err = GetSwaggerType(field.Type)
          Goose.Swagger.Logf(6,"struct subitem=%#v, err:%s", subItem, err)
          if (subItem==nil) || (err != nil) || (subItem.Schema==nil) {
             Goose.Swagger.Logf(1,"Error getting type of subitem %s: %s",field.Name,err)
             return nil, err
          }
-         item.Schema.Required = append(item.Schema.Required,field.Name)
+
          if subItem.Type != "" {
             fieldType = subItem.Type
          } else {
@@ -287,6 +381,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
             Properties:       subItem.Schema.Properties,
          }
       }
+
       Goose.Swagger.Logf(6,"Got final struct: %#v",item)
       return item, nil
    }
@@ -416,83 +511,196 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    return resp, err
 }
 
-func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type, accesstype uint8) (func ([]string, Unmarshaler, interface{}) Response) {
-   return func (parms []string, Unmarshal Unmarshaler, authinfo interface{}) Response {
+func isZero(v reflect.Value) bool {
+   return reflect.Zero(v.Type()) == v
+}
+
+func f64Conv(i interface{}, t reflect.Type) (v reflect.Value, err error) {
+   var u reflect.Value
+
+   v = reflect.ValueOf(i)
+   if !v.Type().ConvertibleTo(t) {
+      return reflect.Zero(t), ErrorInvalidType
+   }
+
+   u = v.Convert(t)
+   if !isZero(v) && isZero(u) {
+      return reflect.Zero(t), ErrorConversionOverflow
+   }
+
+   return u, nil
+}
+
+func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]reflect.Value, error) {
+   var i int
+   var iface interface{}
+   var p string
+   var buf []byte
+   var parm reflect.Value
+   var v reflect.Value
+   var parmType reflect.Type
+   var parmTypeName string
+   var elemDelim string
+   var keyDelim string
+   var ptmp string
+   var keyval string
+   var arrKeyVal []string
+   var err error
+   var ins []reflect.Value
+
+   ins = []reflect.Value{obj}
+
+   for i, iface = range parms {
+      parmType = met.Type.In(i+1)
+      Goose.OpHandle.Logf(1,"parsing parm %#v",iface)
+
+      switch iface.(type) {
+         case string:
+            p = iface.(string)
+            Goose.OpHandle.Logf(5,"parm: %d:%s",i+1,p)
+            parmTypeName = parmType.Name()
+
+            if parmTypeName == "string" {
+               p = "\"" + p + "\""
+
+            } else if (parmType.Kind() == reflect.Array) || (parmType.Kind() == reflect.Slice) {
+               parmTypeName = "[]" + parmType.Elem().Name()
+               if parmType.Elem().Name() == "string" {
+                  p = "[\"" + strings.Replace(p,",","\",\"",-1) + "\"]"
+               } else {
+                  p = "[" + p + "]"
+               }
+            } else if parmType.Kind() == reflect.Map {
+               parmTypeName = "map[" + parmType.Key().Name() + "]" + parmType.Elem().Name()
+               if parmType.Elem().Name() == "string" {
+                  elemDelim = "\""
+               } else {
+                  elemDelim = ""
+               }
+
+               if parmType.Key().Name() == "string" {
+                  keyDelim = "\""
+               } else {
+                  keyDelim = ""
+               }
+               ptmp = ""
+               for _, keyval = range strings.Split(p,",") {
+                  arrKeyVal = strings.Split(keyval,":")
+                  if len(arrKeyVal) != 2 {
+                     Goose.OpHandle.Logf(1,"Internal server error on map parameter encoding %s: %s",p,MapParameterEncodingError)
+                     return nil, MapParameterEncodingError
+                  }
+                  if len(ptmp)>0 {
+                     ptmp += ","
+                  }
+                  ptmp += keyDelim + arrKeyVal[0] + keyDelim + ":" + elemDelim + arrKeyVal[1] + elemDelim
+               }
+               p = "{" + ptmp + "}"
+            }
+            Goose.OpHandle.Logf(4,"parmcoding: %s",p)
+            buf = []byte(p)
+         case bool, []interface{}, map[string]interface{}:
+            buf, err = json.Marshal(iface)
+            if err != nil {
+               Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
+               Goose.OpHandle.Logf(1,"Internal server error parsing %s: %s",buf,err)
+               return nil, err
+            }
+
+         case float64:
+            Goose.OpHandle.Logf(5,"parmtype: %s",parmType.Name())
+            switch parmType.Kind() {
+               case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32:
+                  v, err = f64Conv(iface, parmType)
+                  if err != nil {
+                     Goose.OpHandle.Logf(1,"Internal server error parsing number parameter %q -> %q: %s", iface, v, err)
+                     return nil, err
+                  }
+                  ins = append(ins,v)
+                  continue
+               case reflect.Float64:
+               default:
+                  Goose.OpHandle.Logf(1,"Internal server error parsing number parameter %q: %s", iface, WrongParameterType)
+                  return nil, WrongParameterType
+            }
+         default:
+            if parmType == reflect.TypeOf(iface) {
+               ins = append(ins,reflect.ValueOf(iface))
+               continue
+            }
+            Goose.OpHandle.Logf(1,"Internal server error parsing parameter %q: %s", iface, WrongParameterType)
+            return nil, err
+      }
+      Goose.OpHandle.Logf(5,"parmtype: %s",parmTypeName)
+      parm = reflect.New(parmType)
+      Goose.OpHandle.Logf(1,"adding parm %s",buf)
+      err = json.Unmarshal(buf,parm.Interface())
+      if err != nil {
+         Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
+         Goose.OpHandle.Logf(1,"Internal server error parsing [%s]: %s",buf,err)
+         Goose.OpHandle.Logf(1,"parms %#v",parms)
+         return nil, err
+      }
+
+      Goose.OpHandle.Logf(1,"added parm %#v",reflect.Indirect(parm).Interface())
+
+      ins = append(ins,reflect.Indirect(parm))
+      Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
+   }
+
+   return ins, nil
+}
+
+func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []reflect.Type, accesstype uint8, useWebSocket bool) (func ([]interface{}, Unmarshaler, interface{}) Response) {
+   return func (parms []interface{}, Unmarshal Unmarshaler, authinfo interface{}) Response {
       var httpResp Response
-      var i, j int
-      var p, ptmp string
+      var j int
 //       var outs []reflect.Value
       var ins []reflect.Value
-      var parm reflect.Value
-      var parmType reflect.Type
-      var parmTypeName string
       var err error
       var postvalue reflect.Value
-      var elemDelim, keyDelim string
-      var keyval string
-      var arrKeyVal []string
       var errmsg string
 
-      ins = []reflect.Value{this}
-      for i, p = range parms {
-         Goose.OpHandle.Logf(5,"parm: %d:%s",i+1,p)
-         parmType = met.Type.In(i+1)
-         parmTypeName = parmType.Name()
-         if parmTypeName == "string" {
-            p = "\"" + p + "\""
+      defer func() {
+         if panicerr := recover(); panicerr != nil {
+            const size = 64 << 10
+            var buf []byte
+            var srcs []string
+            var src string
 
-         } else if (parmType.Kind() == reflect.Array) || (parmType.Kind() == reflect.Slice) {
-            parmTypeName = "[]" + parmType.Elem().Name()
-            if parmType.Elem().Name() == "string" {
-               p = "[\"" + strings.Replace(p,",","\",\"",-1) + "\"]"
-            } else {
-               p = "[" + p + "]"
+            buf  = make([]byte, size)
+            buf  = buf[:runtime.Stack(buf, false)]
+            srcs = strings.Split(string(buf),"\n")
+            for _, src = range srcs {
+               if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
+                  break
+               }
             }
-         } else if parmType.Kind() == reflect.Map {
-            parmTypeName = "map[" + parmType.Key().Name() + "]" + parmType.Elem().Name()
-            if parmType.Elem().Name() == "string" {
-               elemDelim = "\""
-            } else {
-               elemDelim = ""
-            }
+            Goose.Serve.Logf(0,"panic (%s): calling %#v @ %s", panicerr, ins, src)
+         }
+      }()
 
-            if parmType.Key().Name() == "string" {
-               keyDelim = "\""
+      if isPtr {
+         ins, err = pushParms(parms, this, met)
+      } else {
+         ins, err = pushParms(parms, this.Elem(), met)
+      }
+
+      if err != nil {
+         httpResp.Status = http.StatusInternalServerError
+         httpResp.Body   = "Internal server error"
+         httpResp.Header = map[string]string{}
+         return httpResp
+      }
+
+      if this.Type().Kind() == reflect.Struct {
+         if _, ok := this.Type().FieldByName("Session"); ok {
+            if this.Kind()==reflect.Ptr {
+               Goose.OpHandle.Logf(0,"THIS SESSION: %#v",this.Elem().FieldByName("Session"))
             } else {
-               keyDelim = ""
+               Goose.OpHandle.Logf(0,"THIS SESSION: %#v",this.FieldByName("Session"))
             }
-            ptmp = ""
-            for _, keyval = range strings.Split(p,",") {
-               arrKeyVal = strings.Split(keyval,":")
-               if len(arrKeyVal) != 2 {
-                  Goose.OpHandle.Logf(1,"map parameter encoding error: %s",err)
-                  httpResp.Status = http.StatusInternalServerError
-                  httpResp.Body   = "Internal server error"
-                  httpResp.Header = map[string]string{}
-                  Goose.OpHandle.Logf(1,"Internal server error on map parameter encoding %s: %s",p,err)
-                  return httpResp
-               }
-               if len(ptmp)>0 {
-                  ptmp += ","
-               }
-               ptmp += keyDelim + arrKeyVal[0] + keyDelim + ":" + elemDelim + arrKeyVal[1] + elemDelim
-            }
-            p = "{" + ptmp + "}"
          }
-         Goose.OpHandle.Logf(5,"parmtype: %s",parmTypeName)
-         Goose.OpHandle.Logf(4,"parmcoding: %s",p)
-         parm = reflect.New(parmType)
-         err = json.Unmarshal([]byte(p),parm.Interface())
-         if err != nil {
-            Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
-            httpResp.Status = http.StatusInternalServerError
-            httpResp.Body   = "Internal server error"
-            httpResp.Header = map[string]string{}
-            Goose.OpHandle.Logf(1,"Internal server error parsing %s: %s",p,err)
-            return httpResp
-         }
-         ins = append(ins,reflect.Indirect(parm))
-         Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
       }
 
 //                  Goose.OpHandle.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
@@ -540,6 +748,7 @@ func buildHandle(this reflect.Value, met reflect.Method, posttype []reflect.Type
       }
 
       retData := met.Func.Call(ins)
+
       Goose.OpHandle.Logf(5,"retData: %#v",retData)
       return retData[0].Interface().(Response)
    }
@@ -620,13 +829,283 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
    return
 }
 
+func validateProtoList(proto []string) (bool, bool, error) {
+   var plain, crypt, http, ws bool
+   var p string
+
+   for _, p = range proto {
+      switch p {
+         case "http" :
+            plain = true
+            http  = true
+         case "https" :
+            crypt = true
+            http  = true
+         case "ws" :
+            plain = true
+            ws    = true
+         case "wss" :
+            crypt = true
+            ws    = true
+         default:
+            return false, false, ErrorInvalidProtocol
+      }
+   }
+
+   return http && ws, plain && crypt, nil
+}
+
+func buildSubHandles(OpType reflect.Type, produces []string, consumes []string) (*strtree.Node, map[string]*SwaggerOperationT, error) {
+   var Op reflect.Type
+   var fld reflect.StructField
+   var method reflect.Method
+   var methodName string
+   var callByRef, ok bool
+   var i, j int
+   var t strtree.Node
+   var spec map[string]*SwaggerOperationT
+   var operation *SwaggerOperationT
+   var err error
+   var inTag string
+
+Goose.New.Logf(0,"OpType: %#v",OpType)
+
+   if OpType.Kind() != reflect.Struct {
+      Goose.New.Logf(1,"Error parsing object %s.%s to handle websocket: %s",OpType.PkgPath(),OpType.Name(), ErrorWrongHandlerKind)
+      return nil, nil, ErrorWrongHandlerKind
+   }
+
+   spec = map[string]*SwaggerOperationT{}
+
+   for i=0; i<OpType.NumField(); i++ {
+      fld = OpType.Field(i)
+      if strings.ToUpper(fld.Name) == "ON" { // ON is a reserved name: it is used to register event callbacks
+         Goose.New.Logf(1,"Reserved word conflict: field %s ignored",fld.Name)
+         continue
+      }
+
+      inTag = fld.Tag.Get("in")
+      if inTag == "" {
+         continue // not a websocket operation because input parameters not defined ...
+      }
+
+      if fld.Name[:1] == strings.ToLower(fld.Name[:1]) {
+         callByRef = false
+         methodName = strings.ToUpper(fld.Name[:1]) + fld.Name[1:]
+         if method, ok = OpType.MethodByName(methodName); !ok {
+            Op = reflect.PtrTo(OpType)
+            if method, ok = Op.MethodByName(methodName); !ok {
+               Goose.New.Logf(5,"|wsmethods|=%d",Op.NumMethod())
+               Goose.New.Logf(5,"wstype=%s.%s",Op.PkgPath(),Op.Name())
+               for j=0; j<Op.NumMethod(); j++ {
+                  mt := Op.Method(j)
+                  Goose.New.Logf(5,"%d: %s",j,mt.Name)
+               }
+
+               Goose.New.Logf(1,"Method not found: %s, Data: %#v",methodName,Op)
+               continue // Unexported field but not a websocket operation ...
+            } else {
+               Goose.New.Logf(3,"Pointer method %s found, type of operation: %s",methodName,OpType)
+               callByRef = true
+            }
+         }
+      } else {
+         continue // not a websocket operation (first identifier letter must be lowercase in struct and uppercase in method name) ...
+      }
+
+      operation, err = GetWebSocketSpec(fld, methodName, method)
+      if err != nil {
+         return nil, nil, err
+      }
+
+      t.Set(
+         methodName,
+         &WSocketOperation{
+            ParmNames: strings.Split(inTag,","),
+            CallByRef: callByRef,
+            Method:    method,
+         })
+
+      spec[methodName] = operation
+   }
+
+   return &t, spec, nil
+}
+
+
+
+
+func getResponses(fld reflect.StructField, typ reflect.Type) (map[string]SwaggerResponseT, reflect.Type, error) {
+   var responseOk              string
+   var responseCreated         string
+   var responseAccepted        string
+   var responses    map[string]SwaggerResponseT
+   var fldType                 reflect.Type
+   var SwaggerParameter       *SwaggerParameterT
+   var err                     error
+   var doc                     string
+   var responseFunc            reflect.Method
+   var ok                      bool
+   var responseList map[string]ResponseT
+
+   responses = map[string]SwaggerResponseT{}
+
+   responseOk = fld.Tag.Get("ok")
+   responseCreated = fld.Tag.Get("created")
+   responseAccepted = fld.Tag.Get("accepted")
+   if responseOk != "" || responseCreated != "" || responseAccepted != "" {
+      if responseOk != "" {
+         fldType = fld.Type
+         if fldType.Kind() == reflect.Ptr {
+            fldType = fldType.Elem()
+         }
+
+         SwaggerParameter, err = GetSwaggerType(fldType)
+         if err != nil {
+            return nil, nil, err
+         }
+
+         if SwaggerParameter == nil {
+            responses[fmt.Sprintf("%d",http.StatusNoContent)] = SwaggerResponseT{
+               Description: responseOk,
+            }
+         } else {
+
+            doc = fld.Tag.Get(fld.Name)
+
+            if doc != "" {
+               SwaggerParameter.Schema.Description    = new(string)
+               (*SwaggerParameter.Schema.Description) = doc
+            }
+
+            if SwaggerParameter.Schema == nil {
+               SwaggerParameter.Schema = &SwaggerSchemaT{}
+            }
+
+            if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+               SwaggerParameter.Schema.Type = SwaggerParameter.Type
+            }
+
+            responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
+               Description: responseOk,
+               Schema:      SwaggerParameter.Schema,
+            }
+            //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+            //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+            Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
+         }
+      }
+      if responseCreated != "" {
+         fldType = fld.Type
+         if fldType.Kind() == reflect.Ptr {
+            fldType = fldType.Elem()
+         }
+
+         SwaggerParameter, err = GetSwaggerType(fldType)
+         if err != nil {
+            return nil, nil, err
+         }
+
+         if SwaggerParameter == nil {
+            responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
+               Description: responseCreated,
+            }
+         } else {
+
+            doc = fld.Tag.Get(fld.Name)
+
+            if doc != "" {
+               SwaggerParameter.Schema.Description    = new(string)
+               (*SwaggerParameter.Schema.Description) = doc
+            }
+
+            if SwaggerParameter.Schema == nil {
+               SwaggerParameter.Schema = &SwaggerSchemaT{}
+            }
+
+            if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+               SwaggerParameter.Schema.Type = SwaggerParameter.Type
+            }
+
+            responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
+               Description: responseCreated,
+               Schema:      SwaggerParameter.Schema,
+            }
+            //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+            //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+            Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusCreated)].Schema))
+         }
+      }
+      if responseAccepted != "" {
+         fldType = fld.Type
+         if fldType.Kind() == reflect.Ptr {
+            fldType = fldType.Elem()
+         }
+
+         SwaggerParameter, err = GetSwaggerType(fldType)
+         if err != nil {
+            return nil, nil, err
+         }
+
+         if SwaggerParameter == nil {
+            responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
+               Description: responseAccepted,
+            }
+         } else {
+
+            doc = fld.Tag.Get(fld.Name)
+
+            if doc != "" {
+               SwaggerParameter.Schema.Description    = new(string)
+               (*SwaggerParameter.Schema.Description) = doc
+            }
+
+            if SwaggerParameter.Schema == nil {
+               SwaggerParameter.Schema = &SwaggerSchemaT{}
+            }
+
+            if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
+               SwaggerParameter.Schema.Type = SwaggerParameter.Type
+            }
+
+            responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
+               Description: responseAccepted,
+               Schema:      SwaggerParameter.Schema,
+            }
+            //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
+            //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
+            Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusAccepted)].Schema))
+         }
+      }
+   } else if responseFunc, ok = typ.MethodByName(fld.Name + "Responses"); ok {
+      responseList = responseFunc.Func.Call([]reflect.Value{})[0].Interface().(map[string]ResponseT)
+      for responseStatus, responseSchema := range responseList {
+         SwaggerParameter, err = GetSwaggerType(reflect.TypeOf(responseSchema.TypeReturned))
+         if err != nil {
+            return nil, nil, err
+         }
+         if SwaggerParameter == nil {
+            responses[responseStatus] = SwaggerResponseT{
+               Description: responseSchema.Description,
+            }
+         } else {
+            responses[responseStatus] = SwaggerResponseT{
+               Description: responseSchema.Description,
+               Schema:      SwaggerParameter.Schema,
+            }
+         }
+      }
+   }
+
+   return responses, fldType, nil
+}
 
 
 func New(svcs ...EndPointHandler) (*Service, error) {
    var resp                *Service
    var svc                  EndPointHandler
    var svcElem              EndPointHandler
-   var svcRecv              reflect.Value
+//   var svcRecv              reflect.Value
    var consumes             string
    var svcConsumes          string
    var produces             string
@@ -659,9 +1138,6 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var swaggerLicense       SwaggerLicenseT
    var swaggerContact       SwaggerContactT
    var globalDataCount      int
-   var responseOk           string
-   var responseCreated      string
-   var responseAccepted     string
    var responses map[string]SwaggerResponseT
    var fldType              reflect.Type
    var doc                  string
@@ -676,8 +1152,13 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var postdata             string
 //   var accesstype           uint8
    var parmnames          []string
+   var callByRef            bool
+   var mixedProto           bool
+   var mixedEnc             bool
+   var pos                  int
 
    for _, svc = range svcs {
+
       Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
       if reflect.ValueOf(svc).Kind() == reflect.Ptr {
          Goose.New.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
@@ -718,6 +1199,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   enableCORS  = typ.Field(i).Tag.Get("enableCORS")
                   if typ.Field(i).Tag.Get("proto") != "" {
                      svcProto    = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+                     _, _, err = validateProtoList(svcProto)
+                     if err != nil {
+                        Goose.New.Logf(1,"Error validating global protocol list: %s", err)
+                        return nil, err
+                     }
                   } else {
                      svcProto    = []string{"https"}
                   }
@@ -786,7 +1272,6 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             return nil, ErrorNoRoot
          }
 
-
          hostport := strings.Split(resp.Config.ListenAddress(),":")
          if hostport[0] == "" {
             hostport[0] = resp.Authorizer.GetDNSNames()[0]
@@ -832,7 +1317,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
          httpmethod = fld.Tag.Get("method")
          if httpmethod != "" {
             methodName = strings.ToUpper(fld.Name[:1]) + fld.Name[1:]
-            svcRecv = reflect.ValueOf(svcElem)
+
+            callByRef = false
             if method, ok = typ.MethodByName(methodName); !ok {
                if method, ok = typPtr.MethodByName(methodName); !ok {
                   Goose.New.Logf(5,"|methods|=%d",typ.NumMethod())
@@ -846,7 +1332,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   return nil, errors.New(fmt.Sprintf("Method not found: %s",methodName))
                } else {
                   Goose.New.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
-                  svcRecv = reflect.ValueOf(svc)
+                  callByRef = true
                   Goose.New.Logf(5,"Pointer method found: %s",methodName)
                }
             }
@@ -1015,161 +1501,36 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             if fld.Tag.Get("proto") != "" {
                proto = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+               mixedProto, mixedEnc, err = validateProtoList(proto)
+               if err != nil {
+                  Goose.New.Logf(1,"Error validating global protocol list: %s", err)
+                  return nil, err
+               }
+
+               if mixedProto {
+                  Goose.New.Logf(1,"Error validating global protocol list: %s", ErrorMixedProtocol)
+                  return nil, ErrorMixedProtocol
+               }
+
+               if mixedEnc {
+                  Goose.New.Logf(2,"Warning validating global protocol list on operation %s: both plain and encrypted protocols selected", methodName)
+               }
             } else {
-               proto = svcProto
-            }
-
-            responses = map[string]SwaggerResponseT{}
-
-            responseOk = fld.Tag.Get("ok")
-            responseCreated = fld.Tag.Get("created")
-            responseAccepted = fld.Tag.Get("accepted")
-            if responseOk != "" || responseCreated != "" || responseAccepted != "" {
-               if responseOk != "" {
-                  fldType = fld.Type
-                  if fldType.Kind() == reflect.Ptr {
-                     fldType = fldType.Elem()
-                  }
-
-                  SwaggerParameter, err = GetSwaggerType(fldType)
-                  if err != nil {
-                     return nil, err
-                  }
-
-                  if SwaggerParameter == nil {
-                     responses[fmt.Sprintf("%d",http.StatusNoContent)] = SwaggerResponseT{
-                        Description: responseOk,
-                     }
-                  } else {
-
-                     doc = fld.Tag.Get(fld.Name)
-
-                     if doc != "" {
-                        SwaggerParameter.Schema.Description    = new(string)
-                        (*SwaggerParameter.Schema.Description) = doc
-                     }
-
-                     if SwaggerParameter.Schema == nil {
-                        SwaggerParameter.Schema = &SwaggerSchemaT{}
-                     }
-
-                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
-                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
-                     }
-
-                     responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
-                        Description: responseOk,
-                        Schema:      SwaggerParameter.Schema,
-                     }
-                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
-                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusOK)].Schema))
-                  }
-               }
-               if responseCreated != "" {
-                  fldType = fld.Type
-                  if fldType.Kind() == reflect.Ptr {
-                     fldType = fldType.Elem()
-                  }
-
-                  SwaggerParameter, err = GetSwaggerType(fldType)
-                  if err != nil {
-                     return nil, err
-                  }
-
-                  if SwaggerParameter == nil {
-                     responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
-                        Description: responseCreated,
-                     }
-                  } else {
-
-                     doc = fld.Tag.Get(fld.Name)
-
-                     if doc != "" {
-                        SwaggerParameter.Schema.Description    = new(string)
-                        (*SwaggerParameter.Schema.Description) = doc
-                     }
-
-                     if SwaggerParameter.Schema == nil {
-                        SwaggerParameter.Schema = &SwaggerSchemaT{}
-                     }
-
-                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
-                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
-                     }
-
-                     responses[fmt.Sprintf("%d",http.StatusCreated)] = SwaggerResponseT{
-                        Description: responseCreated,
-                        Schema:      SwaggerParameter.Schema,
-                     }
-                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
-                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusCreated)].Schema))
-                  }
-               }
-               if responseAccepted != "" {
-                  fldType = fld.Type
-                  if fldType.Kind() == reflect.Ptr {
-                     fldType = fldType.Elem()
-                  }
-
-                  SwaggerParameter, err = GetSwaggerType(fldType)
-                  if err != nil {
-                     return nil, err
-                  }
-
-                  if SwaggerParameter == nil {
-                     responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
-                        Description: responseAccepted,
-                     }
-                  } else {
-
-                     doc = fld.Tag.Get(fld.Name)
-
-                     if doc != "" {
-                        SwaggerParameter.Schema.Description    = new(string)
-                        (*SwaggerParameter.Schema.Description) = doc
-                     }
-
-                     if SwaggerParameter.Schema == nil {
-                        SwaggerParameter.Schema = &SwaggerSchemaT{}
-                     }
-
-                     if (SwaggerParameter.Schema.Type=="") && (SwaggerParameter.Type!="") {
-                        SwaggerParameter.Schema.Type = SwaggerParameter.Type
-                     }
-
-                     responses[fmt.Sprintf("%d",http.StatusAccepted)] = SwaggerResponseT{
-                        Description: responseAccepted,
-                        Schema:      SwaggerParameter.Schema,
-                     }
-                     //(*responses[fmt.Sprintf("%d",http.StatusOK)].Schema) = *SwaggerParameter.Schema
-                     //ioutil.WriteFile("debug.txt", []byte(fmt.Sprintf("%#v",responses)), os.FileMode(0770))
-                     Goose.New.Logf(6,"====== %#v",*(responses[fmt.Sprintf("%d",http.StatusAccepted)].Schema))
-                  }
-               }
-            } else if responseFunc, ok := typ.MethodByName(fld.Name + "Responses"); ok {
-               responseList := responseFunc.Func.Call([]reflect.Value{})[0].Interface().(map[string]ResponseT)
-               for responseStatus, responseSchema := range responseList {
-                  SwaggerParameter, err = GetSwaggerType(reflect.TypeOf(responseSchema.TypeReturned))
-                  if err != nil {
-                     return nil, err
-                  }
-                  if SwaggerParameter == nil {
-                     responses[responseStatus] = SwaggerResponseT{
-                        Description: responseSchema.Description,
-                     }
-                  } else {
-                     responses[responseStatus] = SwaggerResponseT{
-                        Description: responseSchema.Description,
-                        Schema:      SwaggerParameter.Schema,
-                     }
-                  }
+               mixedProto, _, _ = validateProtoList(svcProto)
+               if mixedProto {
+                  Goose.New.Logf(2,"Warning using just the first global protocol on operation %s to prevent mixed use of http/https with ws/wss", methodName)
+                  proto = []string{svcProto[0]}
+               } else {
+                  proto = svcProto
                }
             }
 
+            responses, fldType, err = getResponses(fld, typ)
+            if err != nil {
+               return nil, err
+            }
 
-            resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = SwaggerOperationT{
+            resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = &SwaggerOperationT{
                Schemes:     proto,
                OperationId: methodName,
                Parameters:  swaggerParameters,
@@ -1178,7 +1539,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Produces:  []string{produces},
             }
 
-            Goose.New.Logf(5,"Registering marshalers: %s, %s",consumes,produces)
+            Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
 
             resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
             reComp                           = regexp.MustCompile(re)
@@ -1193,6 +1554,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
 */
 
+            pos = len(resp.Svc)
+
             resp.Svc = append(resp.Svc,UrlNode{
                Proto:     proto,
                Path:      path,
@@ -1202,9 +1565,16 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Query:     query,
                Body:      postFields,
                ParmNames: parmnames,
-               Handle:    buildHandle(svcRecv,method,pt,resp.Access),
+               Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
 //               Access:    resp.Access,
             })
+
+            if proto[0][0] == 'w' { // if this is a web service handler
+               resp.Svc[pos].WSocketOperations, resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWebSocket, err = buildSubHandles(fldType,strings.Split(produces,","),strings.Split(consumes,","))
+               if err != nil {
+                  return nil, err
+               }
+            }
 
             reAllOps += "|(" + re + ")"
             Goose.New.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
@@ -1276,11 +1646,11 @@ func (svc *Service) ListenAndServeTLS() error {
 FindEncLoop:
    for _, unode = range svc.Svc {
       for _, p = range unode.Proto {
-         if p == "https" {
+         if p == "https" || p == "wss" {
             useHttps = true
          }
 
-         if p == "http" {
+         if p == "http" || p == "ws" {
             useHttp = true
          }
 
@@ -1362,7 +1732,7 @@ FindEncLoop:
 
 func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var match                []string
-   var parms                []string
+   var parms                []interface{}
    var authparms              map[string]interface{}
    var i, j                   int
    var endpoint               UrlNode
@@ -1380,6 +1750,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var buf                  []byte
    var httpstat               int
    var authinfo               interface{}
+   var useWebSocket           bool
 
    Goose.Serve.Logf(1,"Access %s from %s", r.URL.Path, r.RemoteAddr)
 
@@ -1400,7 +1771,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             Goose.Serve.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
          }
       }()
-      hd.Add("Content-Type","application/json")
+      hd.Add("Content-Type","application/json; charset=utf-8")
 //      w.WriteHeader(http.StatusOK)
       Goose.Serve.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
 //      mrsh = json.NewEncoder(w)
@@ -1426,7 +1797,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   parms = []string{}
+   parms = []interface{}{}
    authparms = map[string]interface{}{}
 
 //   for _, endpoint = range svc.Svc {
@@ -1438,7 +1809,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
             authparms[endpoint.ParmNames[j-i-1]] = match[j]
          }
-         parms = match[i+1:j]
+         for k := i+1; k<j; k++ { // parms = []interface{}(match[i+1:j])
+            parms = append(parms,match[k])
+         }
          j -= i + 1
          break
       }
@@ -1550,10 +1923,101 @@ gzipcheck:
 
    if err == nil {
       Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
-      if svc.Access == AccessAuthInfo || svc.Access == AccessVerifyAuthInfo {
-         resp = endpoint.Handle(parms,umrsh,authinfo)
-      } else {
-         resp = endpoint.Handle(parms,umrsh,nil)
+      if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo {
+         authinfo = nil
+      }
+
+
+      for _, p := range endpoint.Proto {
+         if p=="ws" || p=="wss" {
+            useWebSocket = true
+            break
+         }
+      }
+
+      resp = endpoint.Handle(parms,umrsh,authinfo)
+      if useWebSocket && resp.Status < http.StatusMultipleChoices {
+         websocket.Handler(func (ws *websocket.Conn) {
+            //endpoint.Handle(parms,umrsh,authinfo)
+            var op *WSocketOperation
+            var err error
+            var codec websocket.Codec
+            var request []interface{}
+            var trackid string
+            var opName string
+            var opi interface{}
+            var obj reflect.Value
+            var ins []reflect.Value
+            var WSResponse Response
+
+            if endpoint.consumes == "application/json" {
+               codec = websocket.JSON
+//            } else if endpoint.consumes == "application/xml" {
+//               codec = websocket.Message
+            }
+
+            obj = reflect.ValueOf(resp.Body)
+
+            for {
+               err = codec.Receive(ws, &request)
+               if err != nil {
+                  Goose.Serve.Logf(1,"Websocket protocol error: %s",err)
+                  if err = ws.Close(); err != nil {
+                     Goose.Serve.Logf(1,"Error closing websocket connection: %s",err)
+                  }
+                  break
+               }
+
+               // callID , procedureName, requestData
+               if len(request) < 3 {
+                  Goose.Serve.Logf(1,"Websocket protocol error: %s",WrongParameterLength)
+                  break
+               }
+
+               switch request[0].(type) {
+                  case string:
+                  trackid = request[0].(string)
+                  default:
+                     Goose.Serve.Logf(1,"Websocket protocol error: %s @0",WrongParameterType)
+                     break
+               }
+
+               switch request[1].(type) {
+                  case string:
+                     opName = request[1].(string)
+                  default:
+                     Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, WrongParameterType)
+                     break
+               }
+
+               opi, err = endpoint.WSocketOperations.Get(opName)
+               if err != nil {
+                  Goose.Serve.Logf(1,"Operation lookup failure %s",err)
+                  break
+               }
+               op = opi.(*WSocketOperation)
+
+               if op.CallByRef {
+                  ins, err = pushParms(request[2:], obj, op.Method)
+               } else {
+                  ins, err = pushParms(request[2:], reflect.Indirect(obj), op.Method)
+               }
+
+               if err != nil {
+                  Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, err)
+                  break
+               }
+
+               retData := op.Method.Func.Call(ins)
+               Goose.OpHandle.Logf(5,"retData: %#v",retData)
+
+               WSResponse = retData[0].Interface().(Response)
+
+               // callID , status, response
+               codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+            }
+         }).ServeHTTP(w,r)
+         return
       }
 
       if resp.Status != 0 {
