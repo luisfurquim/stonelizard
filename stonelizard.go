@@ -15,6 +15,7 @@ import (
    "runtime"
 //   "net/url"
    "net/http"
+   "math/rand"
 //   "io/ioutil"
    "crypto/tls"
    "crypto/rsa"
@@ -362,6 +363,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          subItem, err = GetSwaggerType(field.Type)
          Goose.Swagger.Logf(6,"struct subitem=%#v, err:%s", subItem, err)
          if (subItem==nil) || (err != nil) || (subItem.Schema==nil) {
+            if err == ErrorInvalidParameterType {
+               Goose.Swagger.Logf(5,"%s on subitem %s, just ignoring", err, field.Name)
+               continue
+            }
             Goose.Swagger.Logf(1,"Error getting type of subitem %s: %s",field.Name,err)
             return nil, err
          }
@@ -386,12 +391,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
       return item, nil
    }
 
-   name := parm.Name()
-   if name == "" {
-      name = fmt.Sprintf("%s /// %#v",parm,parm)
-   }
-
-   return nil, errors.New(fmt.Sprintf("invalid parameter %s type",name))
+   return nil, ErrorInvalidParameterType
 }
 
 
@@ -1949,6 +1949,13 @@ gzipcheck:
             var obj reflect.Value
             var ins []reflect.Value
             var WSResponse Response
+            var wg sync.WaitGroup
+            var sessionId = rand.Intn(100000)
+            var evHandlers map[string]*WSEventTrigger
+            var name string
+            var ev *WSEventTrigger
+            var i int
+            var evName interface{}
 
             if endpoint.consumes == "application/json" {
                codec = websocket.JSON
@@ -1958,10 +1965,19 @@ gzipcheck:
 
             obj = reflect.ValueOf(resp.Body)
 
+            evHandlers = map[string]*WSEventTrigger{}
+
+            wg.Add(1)
+            wsEventHandle(ws, codec, resp.Body, wg, evHandlers)
+
             for {
                err = codec.Receive(ws, &request)
                if err != nil {
-                  Goose.Serve.Logf(1,"Websocket protocol error: %s",err)
+                  if err == io.EOF {
+                     Goose.Serve.Logf(1,"Ending websocket session %d for %s",sessionId, endpoint.Path)
+                  } else {
+                     Goose.Serve.Logf(1,"Websocket protocol error: %s",err)
+                  }
                   if err = ws.Close(); err != nil {
                      Goose.Serve.Logf(1,"Error closing websocket connection: %s",err)
                   }
@@ -1990,32 +2006,76 @@ gzipcheck:
                      break
                }
 
-               opi, err = endpoint.WSocketOperations.Get(opName)
-               if err != nil {
-                  Goose.Serve.Logf(1,"Operation lookup failure %s",err)
-                  break
-               }
-               op = opi.(*WSocketOperation)
 
-               if op.CallByRef {
-                  ins, err = pushParms(request[2:], obj, op.Method)
+               if opName == "bind" { // reserved word
+                  for i, evName = range request[2:] {
+                     switch evName.(type) {
+                        case string:
+                           if eh, ok := evHandlers[evName.(string)]; ok {
+                              eh.stat = true
+                           } else {
+                              Goose.Serve.Logf(1,"Websocket bind event not found: %s", trackid, evName.(string))
+                              codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                           }
+                        default:
+                           Goose.Serve.Logf(1,"[%s] Websocket bind event protocol error: @%d", trackid, WrongParameterType, i)
+                           codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                     }
+                  }
+               } else if opName == "unbind" { // reserved word
+                  for i, evName = range request[2:] {
+                     switch evName.(type) {
+                        case string:
+                           if eh, ok := evHandlers[evName.(string)]; ok {
+                              eh.stat = false
+                           } else {
+                              Goose.Serve.Logf(1,"Websocket unbind event not found: %s", trackid, evName.(string))
+                              codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                           }
+                        default:
+                           Goose.Serve.Logf(1,"[%s] Websocket unbind event protocol error: @%d", trackid, WrongParameterType, i)
+                           codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                     }
+                  }
                } else {
-                  ins, err = pushParms(request[2:], reflect.Indirect(obj), op.Method)
+                  opi, err = endpoint.WSocketOperations.Get(opName)
+                  if err != nil {
+                     Goose.Serve.Logf(1,"Operation lookup failure %s",err)
+                     break
+                  }
+                  op = opi.(*WSocketOperation)
+
+                  if op.CallByRef {
+                     ins, err = pushParms(request[2:], obj, op.Method)
+                  } else {
+                     ins, err = pushParms(request[2:], reflect.Indirect(obj), op.Method)
+                  }
+
+                  if err != nil {
+                     Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, err)
+                     break
+                  }
+
+                  retData := op.Method.Func.Call(ins)
+                  Goose.OpHandle.Logf(5,"retData: %#v",retData)
+
+                  WSResponse = retData[0].Interface().(Response)
+
+                  // callID , status, response
+                  Goose.Serve.Logf(1,"Websocket [%s] send %#v", trackid, WSResponse.Body)
+                  codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
                }
 
-               if err != nil {
-                  Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, err)
-                  break
-               }
-
-               retData := op.Method.Func.Call(ins)
-               Goose.OpHandle.Logf(5,"retData: %#v",retData)
-
-               WSResponse = retData[0].Interface().(Response)
-
-               // callID , status, response
-               codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+               Goose.Serve.Logf(1,"Websocket [%s] message sent", trackid)
             }
+
+            // stop all event triggers
+            for name, ev = range evHandlers {
+               Goose.Serve.Logf(1,"Event channel close for %s",name)
+               close(ev.ch)
+            }
+
+            wg.Wait()
          }).ServeHTTP(w,r)
          return
       }
@@ -2047,6 +2107,54 @@ gzipcheck:
       }
    }
 }
+
+
+func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, wg sync.WaitGroup, evHandlers map[string]*WSEventTrigger) {
+   var i int
+   var ev string
+   var t reflect.Type
+   var v reflect.Value
+
+   v = reflect.ValueOf(obj)
+   if v.Kind() == reflect.Ptr {
+      v = v.Elem()
+   }
+
+   t = v.Type()
+   Goose.Serve.Logf(1,"Looking for event channel for type %#v",t)
+   for i=0; i<t.NumField(); i++ {
+      Goose.Serve.Logf(1,"Looking for event channel on field %s",t.Field(i).Name)
+      if t.Field(i).Type.AssignableTo(typeWSEventTrigger) {
+         ev = t.Field(i).Tag.Get("event")
+         if ev != "" {
+            Goose.Serve.Logf(1,"Event setup for %s",ev)
+            evHandlers[ev] = v.Field(i).Interface().(*WSEventTrigger)
+            go func(c reflect.Value, name string) {
+               var ok bool
+               var v reflect.Value
+
+               for {
+                  Goose.Serve.Logf(1,"Event comm loop will wait on channel")
+                  v, ok = c.Recv()
+                  Goose.Serve.Logf(1,"Event comm loop test %#v received %#v",ok, v.Interface())
+                  if !ok {
+                     // End event triggering if wsStopEvent has closed the channel
+                     wg.Done()
+                     return
+                  }
+
+                  Goose.Serve.Logf(1,"Event comm Recv: %#v",v.Interface())
+                  // callID , status, response
+                  codec.Send(ws, []interface{}{name, StatusTrigEvent, v.Interface()})
+               }
+
+            }(reflect.ValueOf(evHandlers[ev].ch), ev)
+         }
+      }
+   }
+   Goose.Serve.Logf(1,"Event channels for type %#v all configured",t.Name)
+}
+
 
 func (pa PublicAccessT) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {
    return http.StatusOK, nil, nil

@@ -64,6 +64,11 @@ type WSocketOperation struct {
    Method          reflect.Method  // Method to handle the operation
 }
 
+type WSEventTrigger struct {
+   ch chan interface{}
+   stat bool
+}
+
 type UrlNode struct {
    Path               string       // The URL path with input parameters
    produces           string       // The possible mime-types produced by the operation for output
@@ -841,6 +846,8 @@ const (
    AccessVerifyAuthInfo
 )
 
+const StatusTrigEvent = 275
+const StatusTrigEventDescription = "Trig Event"
 
 var voidType = reflect.TypeOf(Void{})
 var float64Type = reflect.TypeOf(float64(0))
@@ -866,6 +873,8 @@ var WrongParameterType = errors.New("Wrong parameter type")
 var MapParameterEncodingError = errors.New("Map parameter encoding error")
 var ErrorInvalidType = errors.New("Invalid type")
 var ErrorConversionOverflow = errors.New("Conversion overflow")
+var ErrorStopEventTriggering = errors.New("Stop event triggering")
+var ErrorEndEventTriggering = errors.New("End event triggering")
 
 type StonelizardG struct {
    Listener     goose.Alert
@@ -881,3 +890,5 @@ type StonelizardG struct {
 
 var Goose StonelizardG
 var WebSocketResponse Response
+var dummyWSEventTrigger *WSEventTrigger
+var typeWSEventTrigger reflect.Type = reflect.TypeOf(dummyWSEventTrigger)
