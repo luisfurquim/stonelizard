@@ -42,6 +42,8 @@ type Service struct {
    //    3.5. accepted, created, ok: optional tags to define the corresponding custom HTTP status message
    //    3.6. doc: a textual description of what the operation does
    //    3.7. tags named after the parameter variable names: a textual description of the parameters
+   //    3.8. proto: optional tag it must be one of http/https/ws/wss. If either ws or wss are defined, then it defines a websocket based operation. The handler method must return an object
+   //                that handles the websocket communication. Details on how to do it are explained below.
    // 4. All parameter variables are then passed to the corresponding methods. The signature of these methods must conform to which is defined by the tags
    //    4.1. The parameter order is important:
    //         4.1.1. You have to declare path parameters first and in the order they appear in the path.
@@ -74,16 +76,42 @@ stored in an etcd database. Feel free to use them or develop your own authentica
 
 Calling the service with a path '/swagger.json' retrieves an automatically generated swagger.json specification of the service.
 
+
+## Websocket handling:
+
+When an EndPointHandler compliant type defines one or more websocket handlers (fields with the tag 'proto' with values 'ws' or 'wss'), the operation handle method must return an object
+of a struct type. This type may have some fields defining the behavior of the websocket. They may be operation handlers or event triggers.
+
+### Websocket operation handling:
+
+Fields with names starting with lowercase and a struct tag 'in' are considered specifications of websocket operations. The names 'bind' and 'unbind' are reserved.
+There must be defined methods with the same name but with uppercase starting letters. These methods will handle the corresponding websocket operations.
+The method parameters must be listed in a comma separated list defined in the tag 'in'.
+
+### Websocket event triggering:
+
+Fields of type *WSEventTrigger defines events of your websockets. They must be named with uppercase starting letters and have a struct tag 'event' defining the name of the event.
+Is up to your application to define the logic of the event triggering. When your application fires an event, it must trigger the event handler in the client application.
+To do so, just call the Send method from the corresponding *WSEventTrigger field. It returns a nil error if succesful.
+If the client has disconnected the error returned is ErrorEndEventTriggering and no further communication will occur.
+If there is no client handler for this event, the error returned is ErrorStopEventTriggering.
+Client handler may or may not be defined at any time using the reserved websocket operation 'bind' and 'unbind'.
+So, if your application receives ErrorStopEventTriggering, it means that no message was sent to the client, but the websocket is still alive and may define later a client event handler.
+In this case, new attempts to send event messages to the client may be succesfull and, then, a nil error will be returned.
+
 ## Example:
 
 
 ```Go
-.
-.
-.
+package main
 
 import (
    ...
+   "fmt"
+   "sync"
+   "crypto/x509"
+   "net/http"
+   "mime/multipart"
    "github.com/luisfurquim/stonelizard"
    "github.com/luisfurquim/stonelizard/certkit"
    ...
@@ -97,9 +125,12 @@ type Service struct {
    contact stonelizard.Void `contact:"John Doe" url:"http://example.com" email:"john@doe"`
    license stonelizard.Void `license:"The title of the license terms chosen" url:"http://example.com/license"`
 
-   newResearch int `method:"POST" path:"/research/{ResearchType}/user/{User}" header:"X-Trackid" postdata:"files" accepted:"Research registered" doc:"Use this operation to register new researchs on my great system. It returns the new research ID." X-Trackid:"A requester defined unique token to include in log messages making debugging easier." ResearchType:"The type of the research, valid values are 'x', 'y' and 'z'." User:"The user ID of the researcher." files:"Any uploaded documents related to the research."`
-   dropResearch stonelizard.Void `method:"DELETE" path:"/research/{id}" header:"X-Trackid" id:"ID retornado por newResearch" ok:"Ok" X-Trackid:"ID único por request, para acompanhamento/debug via log" doc:"Removes the specified research from my great system"`
-   getResearch ResearchT `method:"GET" path:"/research/{id}" header:"X-Trackid" id:"ID retornado por newResearch" ok:"Ok" X-Trackid:"ID único por request, para acompanhamento/debug via log" doc:"Retrieves data from the specified research from my great system"`
+   newResearch int `method:"POST" path:"/research/{ResearchType}/user/{User}" header:"X-Trackid" postdata:"files" accepted:"Research registered" doc:"Use this operation to register new researchs on my great system. It returns the new research ID." X-Trackid:"Unique request ID, used for logging" ResearchType:"The type of the research, valid values are 'x', 'y' and 'z'." User:"The user ID of the researcher." files:"Any uploaded documents related to the research."`
+   dropResearch stonelizard.Void `method:"DELETE" path:"/research/{id}" header:"X-Trackid" id:"ID retornado por newResearch" ok:"Ok" X-Trackid:"Unique request ID, used for logging" doc:"Removes the specified research from my great system"`
+   getResearch ResearchT `method:"GET" path:"/research/{id}" header:"X-Trackid" id:"ID retornado por newResearch" ok:"Ok" X-Trackid:"Unique request ID, used for logging" doc:"Retrieves data from the specified research from my great system"`
+
+   clientChat CChatT `method:"GET" path:"/chat/client" proto:"wss" header:"X-Trackid" ok:"Ok" X-Trackid:"Unique request ID, used for logging" doc:"Starts a chat with the supporting team of my great system"`
+   supportChat SChatT `method:"GET" path:"/chat/support" proto:"wss" header:"X-Trackid" ok:"Ok" X-Trackid:"Unique request ID, used for logging" doc:"Waits for a client to start a chat of my great system"`
 
    // Let's authenticate through the certkit interface
    ck *certkit.CertKit
@@ -114,7 +145,27 @@ type ResearchT struct {
 }
 
 
+type SChatT struct {
+   authinfo  *x509.Certificate
+   send string `in:"msg" accepted:"Message received"`    // Note: the field MUST be local (using lowercase starting letter)
+   WebComm *stonelizard.WSEventTrigger `event:"Message"` // Note: the field MUST be public (using uppercase starting letter)
+   ch chan string
+}
 
+type CChatT struct {
+   authinfo  *x509.Certificate
+   send string `in:"msg" accepted:"Message received"`    // Note: the field MUST be local (using lowercase starting letter)
+   WebComm *stonelizard.WSEventTrigger `event:"Message"` // Note: the field MUST be public (using uppercase starting letter)
+   ch chan string
+}
+
+type RoomT struct {
+   Support *SChatT
+   Client  *CChatT
+   w *sync.WaitGroup
+}
+
+var MyTeam map[string]RoomT = map[string]RoomT{}
 
 // For example simplicity, we made the Service struct satisfy both the EndPointHandler and
 // Shaper interfaces...
@@ -229,18 +280,179 @@ func (s *Service) GetResearch(Id int, trackId string) stonelizard.Response {
 }
 
 
+
+// The Service.SupportChat method is called when the Service.supportChat operation is requested.
+// According to what was declared in the Service struct, 'trackId' is a parameter passed through
+// HTTP header and the authinfo parameter contains the certificate provided by the authenticated
+// client (as the access tag was set with the value verifyauthinfo, the certificate CA chain was
+// already verified)
+func (s *Service) SupportChat(trackId string, authinfo *x509.Certificate) stonelizard.Response {
+   var chatObj SChatT
+
+   if (!someCheckSupportAccess(authinfo)) {
+      // do some error handling
+      return stonelizard.Response{
+         Status: http.StatusForbidden, // HTTP status code to return
+         Body: "My error message",
+      }
+   }
+
+
+   chatObj = SChatT{
+      authinfo: authinfo,
+      WebComm: stonelizard.NewWSEventTrigger(),
+      ch: make(chan string),
+   }
+
+   MyTeam[authinfo.Subject.CommonName] = RoomT{
+      Support: &chatObj,
+      w: &sync.WaitGroup{},
+   }
+
+   go func() {
+      var err error
+      var msg string
+
+      defer delete(MyTeam,authinfo.Subject.CommonName)
+
+      for {
+         MyTeam[authinfo.Subject.CommonName].w.Add(1)
+         MyTeam[authinfo.Subject.CommonName].w.Wait()
+
+ClientSession:
+         for {
+            select {
+               case msg = <-MyTeam[authinfo.Subject.CommonName].Client.ch:
+                  err = chatObj.WebComm.Send(msg)
+                  if err != nil {
+                     fmt.Printf("Support Bye")
+                     break ClientSession
+                  }
+            }
+         }
+      }
+   }()
+
+   return stonelizard.Response{
+      Status: http.StatusOK,
+      Body: &chatObj,
+   }
+}
+
+
+func (c *SChatT) Send(msg string, authinfo *x509.Certificate) stonelizard.Response {
+
+   MyTeam[authinfo.Subject.CommonName].Support.ch <- msg // Route the support message through its channel which is being read by the client goroutine
+
+   return stonelizard.Response{
+      Status: http.StatusOK,
+      Body: "",
+   }
+}
+
+
+
+// The Service.ClientChat method is called when the Service.clientChat operation is requested.
+// According to what was declared in the Service struct, 'trackId' is a parameter passed through
+// HTTP header and the authinfo parameter contains the certificate provided by the authenticated
+// client (as the access tag was set with the value verifyauthinfo, the certificate CA chain was
+// already verified)
+func (s *Service) ClientChat(trackId string, authinfo *x509.Certificate) stonelizard.Response {
+   var chatObj CChatT
+   var schatObj RoomT
+   var sname string
+
+   if (!someCheckClientkAccess(authinfo)) {
+      // do some error handling
+      return stonelizard.Response{
+         Status: http.StatusForbidden, // HTTP status code to return
+         Body: "My error message",
+      }
+   }
+
+
+   chatObj = CChatT{
+      authinfo: authinfo,
+      WebComm: stonelizard.NewWSEventTrigger(),
+      ch: make(chan string),
+   }
+
+   for sname, schatObj = range MyTeam {
+      if schatObj.Client == nil {
+         break
+      }
+   }
+
+   if schatObj.Client != nil {
+      // do some error handling
+      return stonelizard.Response{
+         Status: http.StatusPreconditionFailed, // HTTP status code to return
+         Body: "No support available",
+      }
+   }
+
+   MyTeam[sname] = RoomT{
+      Support: MyTeam[sname].Support,
+      Client: &chatObj,
+      w: MyTeam[sname].w,
+   }
+
+   go func() {
+      var err error
+      var msg string
+
+      defer func() {
+         MyTeam[sname] = RoomT{
+            Support: MyTeam[sname].Support,
+            Client: nil,
+            w: MyTeam[sname].w,
+         }
+      }()
+      MyTeam[sname].w.Done()
+
+      for {
+         select {
+            case msg = <-MyTeam[sname].Support.ch:
+               err = chatObj.WebComm.Send(msg)
+               if err != nil {
+                  fmt.Printf("Client Bye")
+                  return
+               }
+         }
+      }
+   }()
+
+   return stonelizard.Response{
+      Status: http.StatusOK,
+      Body: &chatObj,
+   }
+}
+
+
+func (c *CChatT) Send(msg string, authinfo *x509.Certificate) stonelizard.Response {
+
+   MyTeam[authinfo.Subject.CommonName].Client.ch <- msg // Route the client message through its channel which is being read by the support goroutine
+
+   return stonelizard.Response{
+      Status: http.StatusOK,
+      Body: "",
+   }
+}
+
+
+
 func MyApp() {
 
    .
    .
    .
 
-   ck, err = certkit.NewFromCK("/path/to/cert/dir")
+   ck, err := certkit.NewFromCK("/path/to/cert/dir")
    if err != nil {
       // handle the error
    }
 
-   err = ck.LoadUserData(map[string]interface{}{})
+   err = ck.LoadUserData()
    if err != nil {
       // handle the error
    }
