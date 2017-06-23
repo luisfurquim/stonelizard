@@ -323,7 +323,7 @@ ClientSession:
          for {
             select {
                case msg = <-MyTeam[authinfo.Subject.CommonName].Client.ch:
-                  err = chatObj.WebComm.Send(msg)
+                  err = chatObj.WebComm.Trigger(msg)
                   if err != nil {
                      fmt.Printf("Support Bye")
                      break ClientSession
@@ -413,7 +413,7 @@ func (s *Service) ClientChat(trackId string, authinfo *x509.Certificate) stoneli
       for {
          select {
             case msg = <-MyTeam[sname].Support.ch:
-               err = chatObj.WebComm.Send(msg)
+               err = chatObj.WebComm.Trigger(msg)
                if err != nil {
                   fmt.Printf("Client Bye")
                   return
