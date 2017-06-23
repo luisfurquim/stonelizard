@@ -1,0 +1,564 @@
+package stonelizard
+
+import (
+   "fmt"
+   "regexp"
+   "errors"
+   "strings"
+   "reflect"
+   "strconv"
+)
+
+func New(svcs ...EndPointHandler) (*Service, error) {
+   var resp                    *Service
+   var svc                      EndPointHandler
+   var svcElem                  EndPointHandler
+//   var svcRecv                  reflect.Value
+   var consumes                 string
+   var svcConsumes              string
+   var produces                 string
+   var svcProduces              string
+   var allowGzip                string
+   var enableCORS               string
+   var proto                  []string
+   var svcProto               []string
+   var svcRoot                  string
+   var i, j, k                  int
+   var typ                      reflect.Type
+   var typPtr                   reflect.Type
+   var pt                     []reflect.Type
+   var fld                      reflect.StructField
+   var method                   reflect.Method
+   var parmcount                int
+   var httpmethod, path         string
+   var methodName               string
+   var tk                       string
+   var ok                       bool
+   var re                       string
+   var reAllOps                 string
+   var reComp                  *regexp.Regexp
+   var c                        rune
+   var err                      error
+   var stmp                     string
+   var SwaggerParameter        *SwaggerParameterT
+   var swaggerParameters      []SwaggerParameterT
+   var swaggerInfo              SwaggerInfoT
+   var swaggerLicense           SwaggerLicenseT
+   var swaggerContact           SwaggerContactT
+   var globalDataCount          int
+   var responses     map[string]SwaggerResponseT
+   var fldType                  reflect.Type
+   var doc                      string
+   var description             *string
+   var headers                []string
+   var query                  []string
+   var optIndex      map[string]int
+   var HdrNew, HdrOld           string
+   var MatchedOpsIndex          int
+   var postFields             []string
+   var postField                string
+   var postdata                 string
+//   var accesstype               uint8
+   var parmnames              []string
+   var callByRef                bool
+   var mixedProto               bool
+   var mixedEnc                 bool
+   var pos                      int
+//   var webSocketOps map[string]*SwaggerWSOperationT
+//   var webSocketSpec           *SwaggerWSOperationT
+
+   for _, svc = range svcs {
+
+      Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
+      if reflect.ValueOf(svc).Kind() == reflect.Ptr {
+         Goose.New.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
+         svcElem = reflect.ValueOf(svc).Elem().Interface().(EndPointHandler)
+         Goose.New.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
+      } else {
+         svcElem = svc
+         Goose.New.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
+      }
+
+      // The first endpoint handler MUST have a config defined, otherwise we'll ignore endpoint handlers until we find one which provides a configuration
+      if resp == nil {
+         resp, err = initSvc(svcElem)
+         if err != nil {
+            return nil, err
+         }
+         if resp == nil {
+            continue // If we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
+         }
+      }
+
+      typ = reflect.ValueOf(svcElem).Type()
+      if typ.Kind()==reflect.Ptr {
+         typPtr     = typ
+         typ        = typ.Elem()
+      } else {
+         typPtr = reflect.PtrTo(typ)
+      }
+
+      if resp.Swagger == nil {
+         for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
+            if svcRoot == "" {
+               svcRoot = typ.Field(i).Tag.Get("root")
+               if svcRoot != "" {
+                  svcConsumes = typ.Field(i).Tag.Get("consumes")
+                  svcProduces = typ.Field(i).Tag.Get("produces")
+                  allowGzip   = typ.Field(i).Tag.Get("allowGzip")
+                  enableCORS  = typ.Field(i).Tag.Get("enableCORS")
+                  if typ.Field(i).Tag.Get("proto") != "" {
+                     svcProto    = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+                     _, _, err = validateProtoList(svcProto)
+                     if err != nil {
+                        Goose.New.Logf(1,"Error validating global protocol list: %s", err)
+                        return nil, err
+                     }
+                  } else {
+                     svcProto    = []string{"https"}
+                  }
+
+                  Goose.New.Logf(3,"Access tag: %s", typ.Field(i).Tag.Get("access"))
+
+                  if typ.Field(i).Tag.Get("access") != "" {
+                     switch strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("access")," ")) {
+                        case "none":
+                           resp.Access = AccessNone
+                        case "auth":
+                           resp.Access = AccessAuth
+                        case "authinfo":
+                           resp.Access = AccessAuthInfo
+                        case "verifyauth":
+                           resp.Access = AccessVerifyAuth
+                        case "verifyauthinfo":
+                           resp.Access = AccessVerifyAuthInfo
+                     }
+                     Goose.New.Logf(3,"Custom access type: %d", resp.Access)
+                  } else {
+                     resp.Access = AccessAuthInfo
+                     Goose.New.Logf(3,"Default access type: %d", resp.Access)
+                  }
+                  globalDataCount++
+               }
+            }
+            if swaggerInfo.Title == "" {
+               stmp = typ.Field(i).Tag.Get("title")
+               if stmp != "" {
+                  swaggerInfo.Title          = stmp
+                  swaggerInfo.Description    = typ.Field(i).Tag.Get("description")
+                  swaggerInfo.TermsOfService = typ.Field(i).Tag.Get("tos")
+                  swaggerInfo.Version        = typ.Field(i).Tag.Get("version")
+                  globalDataCount++
+               }
+            }
+            if swaggerContact.Name == "" {
+               stmp = typ.Field(i).Tag.Get("contact")
+               if stmp != "" {
+                  swaggerContact.Name  = stmp
+                  swaggerContact.Url   = typ.Field(i).Tag.Get("url")
+                  swaggerContact.Email = typ.Field(i).Tag.Get("email")
+                  globalDataCount++
+               }
+            }
+            if swaggerLicense.Name == "" {
+               stmp = typ.Field(i).Tag.Get("license")
+               if stmp != "" {
+                  swaggerLicense.Name  = stmp
+                  swaggerLicense.Url   = typ.Field(i).Tag.Get("url")
+                  globalDataCount++
+               }
+            }
+         }
+
+         swaggerInfo.Contact = swaggerContact
+         swaggerInfo.License = swaggerLicense
+
+         svcRoot     = strings.Trim(strings.Trim(svcRoot," "),"/") + "/"
+         svcConsumes = strings.Trim(svcConsumes," ")
+         svcProduces = strings.Trim(svcProduces," ")
+
+         if (svcRoot=="") || (svcConsumes=="") || (svcProduces=="") {
+            Goose.New.Logf(1,"Err: %s",ErrorNoRoot)
+            return nil, ErrorNoRoot
+         }
+
+         hostport := strings.Split(resp.Config.ListenAddress(),":")
+         if hostport[0] == "" {
+            hostport[0] = resp.Authorizer.GetDNSNames()[0]
+         }
+
+         resp.Swagger = &SwaggerT{
+            Version:     "2.0",
+            Info:        swaggerInfo,
+            Host:        strings.Join(hostport,":"),
+            BasePath:    "/" + svcRoot[:len(svcRoot)-1],
+            Schemes:     svcProto,
+            Consumes:    []string{svcConsumes},
+            Produces:    []string{svcProduces},
+            Paths:       map[string]SwaggerPathT{},
+            Definitions: map[string]SwaggerSchemaT{},
+         }
+
+         resp.Proto = svcProto
+
+         Goose.New.Logf(6,"enableCORS: [%s]",enableCORS)
+         if enableCORS != "" {
+            resp.EnableCORS, err = strconv.ParseBool(enableCORS)
+            Goose.New.Logf(6,"resp.EnableCORS: %#v",resp.EnableCORS)
+            if err != nil {
+               Goose.New.Logf(1,"Err: %s",ErrorServiceSyntax)
+               return nil, ErrorServiceSyntax
+            }
+         }
+
+         Goose.New.Logf(6,"allowGzip: [%s]",allowGzip)
+         if allowGzip != "" {
+            resp.AllowGzip, err = strconv.ParseBool(allowGzip)
+            Goose.New.Logf(6,"resp.AllowGzip: %#v",resp.AllowGzip)
+            if err != nil {
+               Goose.New.Logf(1,"Err: %s",ErrorServiceSyntax)
+               return nil, ErrorServiceSyntax
+            }
+         }
+      }
+
+      for i=0; i<typ.NumField(); i++ {
+         fld = typ.Field(i)
+         httpmethod = fld.Tag.Get("method")
+         if httpmethod != "" {
+            methodName = strings.ToUpper(fld.Name[:1]) + fld.Name[1:]
+
+            callByRef = false
+            if method, ok = typ.MethodByName(methodName); !ok {
+               if method, ok = typPtr.MethodByName(methodName); !ok {
+                  Goose.New.Logf(5,"|methods|=%d",typ.NumMethod())
+                  Goose.New.Logf(5,"type=%s.%s",typ.PkgPath(),typ.Name())
+                  for j=0; j<typ.NumMethod(); j++ {
+                     mt := typ.Method(j)
+                     Goose.New.Logf(5,"%d: %s",j,mt.Name)
+                  }
+
+                  Goose.New.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
+                  return nil, errors.New(fmt.Sprintf("Method not found: %s",methodName))
+               } else {
+                  Goose.New.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
+                  callByRef = true
+                  Goose.New.Logf(5,"Pointer method found: %s",methodName)
+               }
+            }
+            path   = fld.Tag.Get("path")
+
+            if _, ok := resp.Swagger.Paths[path]; !ok {
+               resp.Swagger.Paths[path] = SwaggerPathT{}
+   //         } else if _, ok := resp.Swagger.Paths[path][httpmethod]; !ok {
+   //            resp.Swagger.Paths[path][httpmethod] = SwaggerOperationT{}
+            }
+
+            swaggerParameters = []SwaggerParameterT{}
+
+            re = "^" + strings.ToUpper(httpmethod) + ":/" + svcRoot
+
+            parmcount = 0
+            parmnames = []string{}
+
+            for _, tk = range strings.Split(strings.Trim(path,"/"),"/") {
+               if tk!="" {
+                  if (tk[0]=='{') && (tk[len(tk)-1]=='}') {
+                     re += "([^/]+)/"
+                     parmcount++
+                     SwaggerParameter, err = GetSwaggerType(method.Type.In(parmcount))
+                     if err != nil {
+                        return nil, err
+                     }
+
+                     if SwaggerParameter == nil {
+                        return nil, ErrorInvalidNilParam
+                     }
+
+                     if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
+                        Goose.New.Logf(1,"%s: %s",tk[1:len(tk)-1])
+                        return nil, ErrorInvalidParameterType
+                     }
+
+                     doc = fld.Tag.Get(tk[1:len(tk)-1])
+                     if doc != "" {
+                        description    = new(string)
+                        (*description) = doc
+                     } else {
+                        description = SwaggerParameter.Schema.Description
+                        if description == nil {
+                           description = new(string)
+                        }
+                     }
+
+                     xkeytype := ""
+                     if SwaggerParameter.Schema != nil {
+                        xkeytype = SwaggerParameter.Schema.XKeyType
+                     }
+
+                     swaggerParameters = append(
+                        swaggerParameters,
+                        SwaggerParameterT{
+                           Name: tk[1:len(tk)-1],
+                           In:   "path",
+                           Required: true,
+                           Type: SwaggerParameter.Schema.Type,
+                           XKeyType: xkeytype,
+                           Description: *description,
+                           Format: SwaggerParameter.Format,
+                        })
+                     parmnames = append(parmnames,tk[1:len(tk)-1])
+                  } else if (tk[0]!='{') && (tk[len(tk)-1]!='}') {
+                     for _, c = range tk {
+                        re += fmt.Sprintf("\\x{%x}",c)
+                     }
+                     re += "/"
+                  } else {
+                     return nil, errors.New("syntax error at " + tk)
+                  }
+               }
+            }
+
+            if resp.Svc == nil {
+               resp.Svc = []UrlNode{}
+            }
+
+            re += "{0,1}$"
+
+            Goose.New.Logf(4,"Service " + strings.ToUpper(httpmethod) + ":/" + svcRoot + path + ", RE=" + re )
+
+            query, parmcount, _, swaggerParameters, err = ParseFieldList("query", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
+            }
+
+            headers, parmcount, _, swaggerParameters, err = ParseFieldList("header", parmcount, fld, method, methodName, swaggerParameters)
+            if err != nil {
+               return nil, err
+            }
+
+            parmnames = append(parmnames, query...)
+            parmnames = append(parmnames, headers...)
+
+            postdata = fld.Tag.Get("postdata")
+            if postdata != "" {
+               // Body fields definitions
+               postFields = strings.Split(postdata,",")
+               pt = make([]reflect.Type,len(postFields))
+               for k, postField = range postFields {
+                  parmcount++
+                  pt[k] = method.Type.In(parmcount)
+                  SwaggerParameter, err = GetSwaggerType(pt[k])
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  if SwaggerParameter == nil {
+                     return nil, ErrorInvalidNilParam
+                  }
+
+                  doc = fld.Tag.Get(postField)
+                  if doc != "" {
+                     SwaggerParameter.Schema.Description    = new(string)
+                     (*SwaggerParameter.Schema.Description) = doc
+                  }
+
+                  parmnames                 = append(parmnames, postField)
+                  SwaggerParameter.Name     = postField
+                  SwaggerParameter.In       = "body"
+                  SwaggerParameter.Required = true
+
+                  swaggerParameters = append(swaggerParameters,*SwaggerParameter)
+               }
+
+/*
+               if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
+                  parmcount++
+               }
+
+               if (parmcount+len(postFields)+1) != method.Type.NumIn() {
+                  return nil, errors.New("Wrong parameter count (with post) at method " + methodName)
+               }
+*/
+            } else {
+               pt = nil
+            }
+
+            if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
+               if (parmcount+1) != method.Type.NumIn() {
+                  parmcount++
+                  if (parmcount+1) != method.Type.NumIn() {
+                     return nil, errors.New("Wrong parameter (with info) count at method " + methodName)
+                  }
+               }
+            } else {
+               if (parmcount+1) != method.Type.NumIn() {
+                  return nil, errors.New("Wrong parameter count at method " + methodName)
+               }
+            }
+
+            Goose.New.Logf(5,"Registering: %s",re)
+            consumes = fld.Tag.Get("consumes")
+            Goose.New.Logf(1,"op:%s consumes: %s tag:%#v",methodName,consumes,fld.Tag)
+            if consumes == "" {
+               consumes = svcConsumes
+            }
+
+            produces = fld.Tag.Get("produces")
+            if produces == "" {
+               produces = svcProduces
+            }
+
+            if fld.Tag.Get("proto") != "" {
+               proto = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+               mixedProto, mixedEnc, err = validateProtoList(proto)
+               if err != nil {
+                  Goose.New.Logf(1,"Error validating global protocol list: %s", err)
+                  return nil, err
+               }
+
+               if mixedProto {
+                  Goose.New.Logf(1,"Error validating global protocol list: %s", ErrorMixedProtocol)
+                  return nil, ErrorMixedProtocol
+               }
+
+               if mixedEnc {
+                  Goose.New.Logf(2,"Warning validating global protocol list on operation %s: both plain and encrypted protocols selected", methodName)
+               }
+            } else {
+               mixedProto, _, _ = validateProtoList(svcProto)
+               if mixedProto {
+                  Goose.New.Logf(2,"Warning using just the first global protocol on operation %s to prevent mixed use of http/https with ws/wss", methodName)
+                  proto = []string{svcProto[0]}
+               } else {
+                  proto = svcProto
+               }
+            }
+
+            responses, fldType, err = getResponses(fld, typ)
+            if err != nil {
+               return nil, err
+            }
+
+            resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = &SwaggerOperationT{
+               Schemes:     proto,
+               OperationId: methodName,
+               Parameters:  swaggerParameters,
+               Responses:   responses,
+               Consumes:  []string{consumes},
+               Produces:  []string{produces},
+            }
+
+
+/*
+            for _, prt := range proto {
+               if prt[0:2] == "ws" {
+                  if fld.Tag.Get("in") == "" {
+                     Goose.New.Logf(1,"Error %s getting operations of %s",ErrorMissingWebsocketInTagSyntax,methodName)
+                     return nil, ErrorMissingWebsocketInTagSyntax
+                  }
+
+                  webSocketOps, err = getWebSocketOps(fld)
+                  if err != nil {
+                     return nil, err
+                  }
+//                  webSocketSpec, err = GetWebSocketSpec(fld, methodName, method)
+//                  if err != nil {
+//                     return nil, err
+//                  }
+               }
+            }
+*/
+
+            Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
+
+            resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+            reComp                           = regexp.MustCompile(re)
+            MatchedOpsIndex                 += reComp.NumSubexp() + 1
+
+/*
+            switch strings.ToLower(fld.Tag.Get("access")) {
+               case "none":     accesstype = AccessNone
+               case "auth":     accesstype = AccessAuth
+               case "authinfo": accesstype = AccessAuthInfo
+               default:         accesstype = AccessAuth
+            }
+*/
+
+            pos = len(resp.Svc)
+
+            resp.Svc = append(resp.Svc,UrlNode{
+               Proto:     proto,
+               Path:      path,
+               consumes:  consumes,
+               produces:  produces,
+               Headers:   headers,
+               Query:     query,
+               Body:      postFields,
+               ParmNames: parmnames,
+               Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
+//               Access:    resp.Access,
+            })
+
+            if resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents == nil {
+               resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents = map[string]*SwaggerWSEventT{}
+            }
+
+            for _, prt := range proto {
+               if prt[0:2] == "ws" { // if this is a web service handler
+                  resp.Svc[pos].WSocketOperations, resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSOperations, err = buildSubHandles(fldType,strings.Split(produces,","),strings.Split(consumes,","))
+                  if err != nil {
+                     return nil, err
+                  }
+
+                  resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents[methodName], err = GetWebSocketEventSpec(fld, methodName, method)
+                  if err != nil {
+                     return nil, err
+                  }
+               }
+            }
+
+            reAllOps += "|(" + re + ")"
+            Goose.New.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
+
+            if resp.EnableCORS {
+               index := len(resp.Svc)
+               if optIndex == nil {
+                  optIndex = map[string]int{path:index}
+               } else if index, ok = optIndex[path]; ok {
+                  for _, HdrNew = range headers {
+                     for _, HdrOld = range resp.Svc[index].Headers {
+                        if HdrOld == HdrNew {
+                           break
+                        }
+                     }
+                     if HdrOld != HdrNew {
+                        resp.Svc[index].Headers = append(resp.Svc[index].Headers, HdrNew)
+                     }
+                  }
+                  continue
+               } else {
+                  optIndex[path] = len(resp.Svc)
+               }
+
+               re = "^OPTIONS" + re[len(httpmethod)+1:]
+               resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+               reComp                           = regexp.MustCompile(re)
+               MatchedOpsIndex                 += reComp.NumSubexp() + 1
+
+               resp.Svc = append(resp.Svc,UrlNode{
+                  Path: path,
+                  Headers: headers,
+               })
+               reAllOps += "|(" + re + ")"
+               Goose.New.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
+            }
+         }
+      }
+   }
+
+   Goose.New.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
+   Goose.New.Logf(6,"Operations %#v\n",resp.Svc)
+   resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
+   return resp, nil
+}

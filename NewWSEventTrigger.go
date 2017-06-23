@@ -1,10 +1,11 @@
 package stonelizard
 
+// Initializes a websocket event trigger
 func NewWSEventTrigger() *WSEventTrigger {
    var wset WSEventTrigger
    wset = WSEventTrigger{
-      ch: make(chan interface{}),
-      stat: true,
+      EventData: make(chan interface{}),
+      Status: true,
    }
    return &wset
 }

@@ -4,6 +4,7 @@ import (
    "net/http"
 )
 
+// Creates a Multipart Unmarshaler
 func NewMultipartUnmarshaler(r *http.Request, fields []string) (*MultipartUnmarshaler, error) {
    var err  error
    var m    MultipartUnmarshaler

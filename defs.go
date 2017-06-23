@@ -65,8 +65,8 @@ type WSocketOperation struct {
 }
 
 type WSEventTrigger struct {
-   ch chan interface{}
-   stat bool
+   EventData chan interface{}
+   Status bool
 }
 
 type UrlNode struct {
@@ -213,6 +213,120 @@ type SwaggerInfoT struct {
    Version        string             `json:"version"`
 }
 
+type SwaggerWSOperationT struct {
+   // A list of tags for API documentation control.
+   // Tags can be used for logical grouping of operations by resources or any other qualifier.
+   Tags  []string `json:"tags,omitempty"`
+
+   // A short summary of what the operation does.
+   // For maximum readability in the swagger-ui, this field SHOULD be less than 120 characters.
+   Summary  string `json:"summary,omitempty"`
+
+   // A verbose explanation of the operation behavior. GFM syntax can be used for rich text representation.
+   Description string `json:"description,omitempty"`
+
+   // Additional external documentation for this operation.
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+
+   // Required. Unique string used to identify the websocket suboperation.
+   // The operation id combined with the suboperation id MUST be unique among
+   // all operations described in the API. Tools and libraries MAY use the
+   // operationId/suboperationId combination to uniquely identify a websocket
+   // suboperation, therefore, it is recommended to follow common programming naming
+   // conventions.
+   SuboperationId string `json:"suboperationId"`
+
+   // A list of parameters that are applicable for this websocket suboperation.
+   // The list MUST NOT include duplicated parameters.
+   Parameters           []SwaggerParameterT `json:"parameters,omitempty"`
+
+   // Required. The list of possible responses as they are returned from executing this operation.
+   Responses   map[string]SwaggerResponseT `json:"responses"`
+
+   // Declares this operation to be deprecated.
+   // Usage of the declared operation should be refrained.
+   // Default value is false.
+   Deprecated  bool `json:"deprecated,omitempty"`
+
+   // A declaration of which security schemes are applied for this operation.
+   // The list of values describes alternative security schemes that can be used
+   // (that is, there is a logical OR between the security requirements).
+   // This definition overrides any declared top-level security.
+   // To remove a top-level security declaration, an empty array can be used.
+   Security map[string]SwaggerSecurityT `json:"security,omitempty"`
+}
+
+type SwaggerEventParameterT struct {
+   Name string `json:"name"`
+
+   // GFM syntax can be used for rich text representation
+   Description *string `json:"description,omitempty"`
+
+   // The type of the parameter / The internal type of the array.
+   // Since the parameter is not located at the request body, it is limited to simple types (that is, not an object).
+   // The value MUST be one of "string", "number", "integer", "boolean", "array" or "file" (Files and models are not allowed in arrays).
+   // If type is "file", the consumes MUST be either "multipart/form-data" or " application/x-www-form-urlencoded" and the parameter MUST be in "formData".
+   Type              string         `json:"type"`
+
+   // The extending format for the previously mentioned type. See Data Type Formats for further details.
+   Format            string         `json:"format,omitempty"`
+
+   // If Type is "array", this must show a list of its items.
+   // The list MUST NOT include duplicated parameters.
+   // If type
+   Items        []SwaggerEventParameterT `json:"items,omitempty"`
+
+   // Declares this operation to be deprecated.
+   // Usage of the declared operation should be refrained.
+   // Default value is false.
+   Deprecated  bool `json:"deprecated,omitempty"`
+
+   // Determines whether this parameter is mandatory.
+   // If the parameter is in "path", this property is required and its value MUST be true.
+   // Otherwise, the property MAY be included and its default value is false.
+   Required          bool  `json:"required,omitempty"`
+}
+
+type SwaggerWSEventT struct {
+   // A list of tags for API documentation control.
+   // Tags can be used for logical grouping of operations by resources or any other qualifier.
+   Tags  []string `json:"tags,omitempty"`
+
+   // A short summary of when the event fires.
+   // For maximum readability in the swagger-ui, this field SHOULD be less than 120 characters.
+   Summary  string `json:"summary,omitempty"`
+
+   // A verbose explanation of the event behavior. GFM syntax can be used for rich text representation.
+   Description string `json:"description,omitempty"`
+
+   // Additional external documentation for this event.
+   ExternalDocs   *SwaggerExternalDocsT `json:"externalDocs,omitempty"`
+
+   // Required. Unique string used to identify the websocket event.
+   // The operation id combined with the event id MUST be unique among
+   // all operations+events described in the API. Tools and libraries MAY use the
+   // operationId/eventId combination to uniquely identify a websocket
+   // event, therefore, it is recommended to follow common programming naming
+   // conventions.
+   EventId string `json:"eventId"`
+
+   // A list of parameters that are applicable for this websocket event.
+   // The list MUST NOT include duplicated parameters.
+   Parameters        []SwaggerEventParameterT `json:"parameters,omitempty"`
+
+   // Declares this event to be deprecated.
+   // Usage of the declared event should be refrained.
+   // Default value is false.
+   Deprecated  bool `json:"deprecated,omitempty"`
+
+   // A declaration of which security schemes are applied for this operation.
+   // The list of values describes alternative security schemes that can be used
+   // (that is, there is a logical OR between the security requirements).
+   // This definition overrides any declared top-level security.
+   // To remove a top-level security declaration, an empty array can be used.
+   Security map[string]SwaggerSecurityT `json:"security,omitempty"`
+}
+
 type SwaggerOperationT struct {
    // A list of tags for API documentation control.
    // Tags can be used for logical grouping of operations by resources or any other qualifier.
@@ -274,8 +388,18 @@ type SwaggerOperationT struct {
    // To remove a top-level security declaration, an empty array can be used.
    Security map[string]SwaggerSecurityT `json:"security,omitempty"`
 
-   // Custom stonelizard extension. Specifies suboperations. Used for websocket operations
-   XWebSocket map[string]*SwaggerOperationT `json:"x-wsoperations,omitempty"`
+   // Custom stonelizard extension. Specifies suboperations. Used for websocket operations.
+   // The HTTP connection is upgraded to websocket connection only if the operation returns a 2XX HTTP status code.
+   XWSOperations map[string]*SwaggerWSOperationT `json:"x-websocketoperations,omitempty"`
+
+   // Custom stonelizard extension. Specifies events. Used for websocket operations.
+   // Events only fire if the HTTP connection is upgraded to websocket connection and subjected to application specific
+   // semantics/rules.
+   XWSEvents map[string]*SwaggerWSEventT `json:"x-websocketevents,omitempty"`
+
+   // Custom stonelizard extension. A list of websocket subprotocols the operation can consume.
+   // At this moment, it only accepts the stonelizard's non-standard 'sam+json', which stands for 'JSON encoded simple array messaging'.
+   XWSConsumes []string `json:"x-websocketconsumes,omitempty"`
 }
 
 type SwaggerPathT map[string]*SwaggerOperationT
@@ -406,9 +530,7 @@ type SwaggerSchemaT struct {
    // An object instance is valid against "maxProperties" if its number of properties is more than, or equal to, the value of this keyword.
    MinProperties uint64 `json:"minProperties,omitempty"`
 
-   // Determines whether this parameter is mandatory.
-   // If the parameter is in "path", this property is required and its value MUST be true.
-   // Otherwise, the property MAY be included and its default value is false.
+   // Lists which of the objetct properties are mandatory.
    Required          []string  `json:"required,omitempty"`
 
    // This keyword's value MUST be an array. This array MUST have at least one element.
@@ -854,6 +976,7 @@ var float64Type = reflect.TypeOf(float64(0))
 var MaxUploadMemory int64 = 16 * 1024 * 1024
 var gorootRE *regexp.Regexp
 var gosrcRE *regexp.Regexp
+var tagRE *regexp.Regexp
 
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorParmListSyntax = errors.New("Syntax error on parameter list")
@@ -875,7 +998,11 @@ var ErrorInvalidType = errors.New("Invalid type")
 var ErrorConversionOverflow = errors.New("Conversion overflow")
 var ErrorStopEventTriggering = errors.New("Stop event triggering")
 var ErrorEndEventTriggering = errors.New("End event triggering")
-
+var ErrorMissingWebsocketInTagSyntax = errors.New("Syntax error missing websocket 'in' tag")
+var ErrorNoRoot = errors.New("No service root specified")
+var ErrorServiceSyntax = errors.New("Syntax error on service definition")
+var ErrorCannotWrapListener = errors.New("Cannot wrap listener")
+var ErrorFieldIsOfWSEventTriggerTypeButUnexported = errors.New("Field is of Event Trigger type, but it is not exported")
 type StonelizardG struct {
    Listener     goose.Alert
    Swagger      goose.Alert

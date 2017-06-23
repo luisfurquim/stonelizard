@@ -8,6 +8,7 @@ import (
    "mime/multipart"
 )
 
+// converts json encoded data to the type 'typ'
 func toType(elem string, typ reflect.Type) (reflect.Value, error) {
    var val reflect.Value
    var err error
@@ -22,6 +23,7 @@ func toType(elem string, typ reflect.Type) (reflect.Value, error) {
    return val.Elem(), nil
 }
 
+// Extracts one field from the HTTP POST vars
 func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (interface{}, error) {
    var a     []string
    var f    []*multipart.FileHeader
@@ -41,12 +43,15 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
       case reflect.Array, reflect.Slice :
          res = reflect.MakeSlice(vtype, 0, 0)
 
+         // Extracts data values
          if a, ok = mp.form.Value[fldName]; ok {
             if (vtype.Elem().Kind() == reflect.String) || (vtype.Elem().Kind() == reflect.Interface) {
+               // No need of conversion, just add to the array
                for _, s = range a {
                   res = reflect.Append(res,reflect.ValueOf(s))
                }
             } else {
+               // Conversion needed based on the kind of target storage provided
                for _, s = range a {
                   tmpval, err = toType(s,vtype.Elem())
                   if err != nil {
@@ -57,6 +62,7 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
             }
          }
 
+         // Extract files
          if f, ok = mp.form.File[fldName]; ok {
             if (vtype.Elem()==fhtype) || (vtype.Elem().Kind() == reflect.Interface) {
                for _, h = range f {
@@ -69,6 +75,7 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
 
          return res.Interface(), nil
       default:
+         // Extract a single variable from post form
          if a, ok = mp.form.Value[fldName]; ok {
             if (vtype.Kind() == reflect.String) || (vtype.Kind() == reflect.Interface) {
                return a[0], nil
@@ -82,6 +89,7 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
             return res.Interface(), nil
          }
 
+         // Extract a single file
          if f, ok = mp.form.File[fldName]; ok {
             if (vtype==fhtype) || (vtype.Kind() == reflect.Interface) {
                return f[0], nil
@@ -93,6 +101,7 @@ func (mp *MultipartUnmarshaler) getField(fldName string, vtype reflect.Type) (in
    return nil, ErrorMissingRequiredPostBodyField
 }
 
+// Fetches the next value from the HTTP POST vars
 func (mp *MultipartUnmarshaler) Decode(v interface{}) error {
    var val    reflect.Value
    var vtype  reflect.Type
