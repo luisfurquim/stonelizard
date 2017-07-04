@@ -9,7 +9,7 @@ import (
 
 // Creates the handles for each websocket event
 func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, wg sync.WaitGroup, evHandlers map[string]*WSEventTrigger) {
-   var i, j int
+   var i int
    var ev string
    var tag []string
    var tags [][]string
@@ -46,22 +46,24 @@ EventTriggerScan:
          // Scans for the TYPES of the event trigger parameters.
          // Manual tag parsing (no reflect.StructTag facilities) because the tag names are not known.
          tags = tagRE.FindAllStringSubmatch(string(t.Field(i).Tag),-1)
-         parmtypes = make([]reflect.Type,len(tags))
-         for j, tag = range tags {
-            switch tag[2] {
-            case "string":
-               parmtypes[j] = reflect.TypeOf("")
-            case "number":
-               parmtypes[j] = reflect.TypeOf(float64(0.0))
-            case "integer":
-               parmtypes[j] = reflect.TypeOf(int64(0))
-            case "boolean":
-               parmtypes[j] = reflect.TypeOf(false)
-            case "array":
-               parmtypes[j] = reflect.TypeOf([]interface{}{})
-            default:
-               Goose.Serve.Logf(1,"Error %s (%s), trigger not configured",WrongParameterType,tags[2])
-               continue EventTriggerScan
+         parmtypes = []reflect.Type{}
+         for _, tag = range tags {
+            if tag[1] != "doc" {
+               switch tag[2] {
+               case "string":
+                  parmtypes = append(parmtypes,reflect.TypeOf(""))
+               case "number":
+                  parmtypes = append(parmtypes,reflect.TypeOf(float64(0.0)))
+               case "integer":
+                  parmtypes = append(parmtypes,reflect.TypeOf(int64(0)))
+               case "boolean":
+                  parmtypes = append(parmtypes,reflect.TypeOf(false))
+               case "array":
+                  parmtypes = append(parmtypes,reflect.TypeOf([]interface{}{}))
+               default:
+                  Goose.Serve.Logf(1,"Error %s (%s), trigger not configured",WrongParameterType,tag[2])
+                  continue EventTriggerScan
+               }
             }
          }
 
@@ -73,6 +75,8 @@ EventTriggerScan:
             var t reflect.Type
             var i int
 
+            defer wg.Done()
+
 ExpectTrigger:
             for {
                // Wait for data sent by the websocket application layer (the event triggering)
@@ -81,19 +85,19 @@ ExpectTrigger:
                Goose.Serve.Logf(4,"Event comm loop test %#v received %#v",ok, v.Interface())
                if !ok {
                   // End event triggering if wsStopEvent has closed the channel
-                  wg.Done()
                   return
                }
 
                // Check for compliance: the websocket application MUST send data as defined (length and type) in the StrucTag
-               if v.Len() != len(types) {
-                  Goose.Serve.Logf(1,"Error %s: %d",WrongParameterLength, v.Len())
+               Goose.Serve.Logf(4,"Debug %T - %#v, %T - %#v", v, v, types, types)
+               if len(v.Interface().([]interface{})) != len(types) {
+                  Goose.Serve.Logf(1,"Error %s: len(param) == %d, len(types)==%d",WrongParameterLength, len(v.Interface().([]interface{})), len(types))
                   continue
                }
 
                for i, t = range types {
-                  if t != v.Index(i).Type() {
-                     Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Index(i).Type)
+                  if t != v.Elem().Index(i).Elem().Type() {
+                     Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
                      continue ExpectTrigger
                   }
                }
