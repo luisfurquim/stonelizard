@@ -100,8 +100,8 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
          }
    }
 
-   Goose.Auth.Logf(6,"authtype: %#v",atype)
-   Goose.Auth.Logf(6,"CAs: %#v",roots)
+   Goose.Auth.Logf(4,"authtype: %#v",atype)
+   Goose.Auth.Logf(5,"CAs: %#v",roots)
 
    tlsConfig = &tls.Config{
       ClientAuth: atype,

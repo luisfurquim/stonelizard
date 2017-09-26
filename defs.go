@@ -18,6 +18,10 @@ import (
 
 type Void struct{}
 
+type Static struct {
+   w io.Writer
+}
+
 type StoppableListener struct {
   *net.TCPListener           // Wrapped listener
    stop             chan int // Channel used only to indicate listener should shutdown
@@ -976,6 +980,7 @@ var float64Type = reflect.TypeOf(float64(0))
 var MaxUploadMemory int64 = 16 * 1024 * 1024
 var gorootRE *regexp.Regexp
 var gosrcRE *regexp.Regexp
+var gosrcFNameRE *regexp.Regexp
 var tagRE *regexp.Regexp
 
 var ErrorStopped = errors.New("Stop signal received")

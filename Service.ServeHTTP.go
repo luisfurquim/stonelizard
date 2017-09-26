@@ -159,6 +159,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          Goose.Serve.Logf(1,"Error initializing multipart/formdata unmarshaller for %s: %s", r.URL.Path, err)
          return
       }
+   } else {
+      Goose.Serve.Logf(1,"Internal server error determining input mimetype")
+      return
    }
 
    Goose.Serve.Logf(6,"umrsh=%#v",umrsh)
@@ -197,6 +200,12 @@ gzipcheck:
    } else if endpoint.produces == "application/xml" {
       mrsh = xml.NewEncoder(outWriter)
       hd.Add("Content-Type","application/xml")
+   } else if (endpoint.produces == "text/html") || (endpoint.produces == "text/javascript") || (endpoint.produces == "application/javascript") {
+      mrsh = NewStaticEncoder(outWriter)
+      hd.Add("Content-Type","text/html; charset=utf-8")
+   } else {
+      Goose.Serve.Logf(1,"Internal server error determining response mimetype")
+      return
    }
 
    Goose.Serve.Logf(5,"svc.Access: %d",svc.Access)
@@ -227,7 +236,7 @@ gzipcheck:
             var err error
             var codec websocket.Codec
             var request []interface{}
-            var trackid string
+            var trackid int64
             var opName string
             var opi interface{}
             var obj reflect.Value
@@ -253,6 +262,7 @@ gzipcheck:
 
             wsEventHandle(ws, codec, resp.Body, wg, evHandlers)
 
+            wsMainLoop:
             for {
                err = codec.Receive(ws, &request)
                if err != nil {
@@ -274,51 +284,71 @@ gzipcheck:
                }
 
                switch request[0].(type) {
-                  case string:
-                  trackid = request[0].(string)
+                  case float64:
+                  trackid = int64(request[0].(float64))
                   default:
-                     Goose.Serve.Logf(1,"Websocket protocol error: %s @0",WrongParameterType)
-                     break
+                     Goose.Serve.Logf(1,"Websocket protocol error %s @0: %T",WrongParameterType,request[0])
+                     break wsMainLoop
                }
 
                switch request[1].(type) {
                   case string:
                      opName = request[1].(string)
                   default:
-                     Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, WrongParameterType)
-                     break
+                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: %d @1", trackid, WrongParameterType)
+                     break wsMainLoop
                }
 
 
                if opName == "bind" { // reserved word
+                  parmOk := true
+                  bindFor:
                   for i, evName = range request[2:] {
                      switch evName.(type) {
                         case string:
                            if eh, ok := evHandlers[evName.(string)]; ok {
                               eh.Status = true
                            } else {
-                              Goose.Serve.Logf(1,"Websocket bind event not found: %s", trackid, evName.(string))
+                              parmOk = false
+                              Goose.Serve.Logf(1,"[%d] Websocket bind event %s not found, id: %d", trackid, evName.(string))
                               codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                              break bindFor
                            }
                         default:
-                           Goose.Serve.Logf(1,"[%s] Websocket bind event protocol error: @%d", trackid, WrongParameterType, i)
+                           parmOk = false
+                           Goose.Serve.Logf(1,"[%d] Websocket bind event protocol error %s: @%d", trackid, WrongParameterType, i)
                            codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                           break bindFor
                      }
                   }
+                  if parmOk {
+                     Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))
+                     codec.Send(ws, []interface{}{trackid, http.StatusOK})
+                  }
                } else if opName == "unbind" { // reserved word
+                  parmOk := true
+                  unbindFor:
                   for i, evName = range request[2:] {
                      switch evName.(type) {
                         case string:
                            if eh, ok := evHandlers[evName.(string)]; ok {
                               eh.Status = false
                            } else {
-                              Goose.Serve.Logf(1,"Websocket unbind event not found: %s", trackid, evName.(string))
+                              parmOk = false
+                              Goose.Serve.Logf(1,"[%d] Websocket unbind event %s not found, id: %d", trackid, evName.(string))
                               codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                              break unbindFor
                            }
                         default:
-                           Goose.Serve.Logf(1,"[%s] Websocket unbind event protocol error: @%d", trackid, WrongParameterType, i)
+                           parmOk = false
+                           Goose.Serve.Logf(1,"[%d] Websocket unbind event protocol error %s: @%d", trackid, WrongParameterType, i)
                            codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                           break unbindFor
                      }
+                  }
+                  if parmOk {
+                     Goose.Serve.Logf(3,"[%d] Websocket unbound event %s", evName.(string), trackid)
+                     codec.Send(ws, []interface{}{trackid, http.StatusOK})
                   }
                } else {
                   opi, err = endpoint.WSocketOperations.Get(opName)
@@ -335,7 +365,7 @@ gzipcheck:
                   }
 
                   if err != nil {
-                     Goose.Serve.Logf(1,"[%s] Websocket protocol error: %s @1", trackid, err)
+                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: %s @1", trackid, err)
                      break
                   }
 
@@ -345,11 +375,11 @@ gzipcheck:
                   WSResponse = retData[0].Interface().(Response)
 
                   // callID , status, response
-                  Goose.Serve.Logf(1,"Websocket [%s] send %#v", trackid, WSResponse.Body)
+                  Goose.Serve.Logf(1,"[%d] Websocket send %#v", trackid, WSResponse.Body)
                   codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
                }
 
-               Goose.Serve.Logf(1,"Websocket [%s] message sent", trackid)
+               Goose.Serve.Logf(1,"[%d] Websocket message sent", trackid)
             }
 
             // stop all event triggers

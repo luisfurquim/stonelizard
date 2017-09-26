@@ -37,18 +37,43 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
          if panicerr := recover(); panicerr != nil {
             const size = 64 << 10
             var buf []byte
-            var srcs []string
+            var srcs, srcs2 []string
             var src string
+            var parms string
+            var p reflect.Value
+            var tmp string
+            var i int
 
             buf  = make([]byte, size)
             buf  = buf[:runtime.Stack(buf, false)]
             srcs = strings.Split(string(buf),"\n")
             for _, src = range srcs {
                if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
-                  break
+                  srcs2 = append(srcs2,gosrcFNameRE.FindStringSubmatch(src)[1])
                }
             }
-            Goose.Serve.Logf(0,"panic (%s): calling %#v @ %s", panicerr, ins, src)
+
+            src = strings.Join(srcs2,", ")
+
+            if len(src) == 0 {
+               for i=len(srcs)-1; i>0; i-- {
+                  Goose.Serve.Logf(0,"panic loop %d/%d", i, len(srcs))
+                  src = srcs[i]
+                  if len(src) > 0 {
+                     break
+                  }
+               }
+            }
+
+            for _, p = range ins[1:] {
+               tmp = fmt.Sprintf(" %#v; ", p.Interface())
+               if len(tmp) > 40 {
+                  tmp = tmp[:40] + "; "
+               }
+               parms += tmp
+            }
+
+            Goose.Serve.Logf(0,"panic (%s): calling %s -> %s with %s @ %s", panicerr, met.PkgPath, met.Name, parms, src)
          }
       }()
 

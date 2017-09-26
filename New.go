@@ -500,10 +500,6 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 //               Access:    resp.Access,
             })
 
-            if resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents == nil {
-               resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents = map[string]*SwaggerWSEventT{}
-            }
-
             for _, prt := range proto {
                if prt[0:2] == "ws" { // if this is a web service handler
                   resp.Svc[pos].WSocketOperations, resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSOperations, err = buildSubHandles(fldType,strings.Split(produces,","),strings.Split(consumes,","))
@@ -511,7 +507,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      return nil, err
                   }
 
-                  resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents[methodName], err = GetWebSocketEventSpec(fld, methodName, method)
+                  resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSEvents, err = GetWebSocketEventSpec(fld, methodName, method)
                   if err != nil {
                      return nil, err
                   }

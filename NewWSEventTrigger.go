@@ -5,7 +5,7 @@ func NewWSEventTrigger() *WSEventTrigger {
    var wset WSEventTrigger
    wset = WSEventTrigger{
       EventData: make(chan interface{}),
-      Status: true,
+      Status: false,
    }
    return &wset
 }

@@ -6,11 +6,12 @@ import (
 )
 
 // Returns a swagger definition of all the events defined by type of the struct field "field"
-func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMethod reflect.Method) (*SwaggerWSEventT, error) {
+func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMethod reflect.Method) (map[string]*SwaggerWSEventT, error) {
    var i                     int
    var docndx                int
    var parmcount             int
    var event                *SwaggerWSEventT
+   var events    map[string]*SwaggerWSEventT
    var tags              [][]string
    var tag                 []string
    var desc1, desc2          string
@@ -25,6 +26,8 @@ func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMet
    desc2  = "Event data"
    docndx = -1
 
+   events = map[string]*SwaggerWSEventT{}
+
    // Scans the struct for event trigger definitions
    // Event trigger definitions are fields satisfying these rules:
    // a) MUST be of type WSEventTrigger
@@ -38,7 +41,7 @@ func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMet
 
       event = &SwaggerWSEventT{
          Description: fld.Tag.Get("doc"),
-         EventId: WSMethodName,
+         EventId: fld.Name,
          Parameters: []SwaggerEventParameterT{
             SwaggerEventParameterT{
                Name: "EventId",
@@ -95,8 +98,10 @@ func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMet
          copy(event.Parameters[1].Items[docndx:],event.Parameters[1].Items[docndx+1:])
          event.Parameters[1].Items = event.Parameters[1].Items[:len(event.Parameters[1].Items)-1]
       }
+
+      events[event.EventId] = event
    }
 
-   return event, nil
+   return events, nil
 }
 

@@ -74,6 +74,7 @@ EventTriggerScan:
             var v reflect.Value
             var t reflect.Type
             var i int
+            var err error
 
             defer wg.Done()
 
@@ -103,8 +104,12 @@ ExpectTrigger:
                }
 
                Goose.Serve.Logf(1,"Event comm Recv: %#v",v.Interface())
-               // callID , event data
-               codec.Send(ws, []interface{}{name, v.Interface()})
+               // event name , event data
+               err = codec.Send(ws, []interface{}{0, name, v.Interface()})
+               if err != nil {
+                  c.Close()
+                  return
+               }
             }
 
          }(reflect.ValueOf(evHandlers[ev].EventData), ev, parmtypes)

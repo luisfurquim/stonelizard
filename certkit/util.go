@@ -221,7 +221,7 @@ func NewFromCK(path string) (*CertKit, error) {
       }
    }
    ck.ServerX509KeyPair, err = tls.X509KeyPair(ck.ServerCertPem, ck.ServerKeyPem)
-   return &ck, nil
+   return &ck, err
 }
 
 func (ck *CertKit) Setup(udata map[string]interface{}) error {
