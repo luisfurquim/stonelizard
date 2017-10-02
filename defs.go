@@ -478,7 +478,8 @@ type SwaggerSchemaT struct {
    Type              string         `json:"type"`
 
    // Required if type is "array". Describes the type of items in the array.
-   Items            *SwaggerItemT   `json:"items,omitempty"`
+//   Items            *SwaggerItemT   `json:"items,omitempty"`
+   Items            *SwaggerSchemaT   `json:"items,omitempty"`
 
    // The extending format for the previously mentioned type. See Data Type Formats for further details.
    Format            string         `json:"format,omitempty"`
@@ -573,8 +574,14 @@ type SwaggerSchemaT struct {
    // A free-form property to include a an example of an instance for this schema.
    Example  interface{} `json:"example,omitempty"`
 
+   // Custom stonelizard extension. Currently it only accepts cskv (comma separated key-values: k1:v1,...,kn:vn)
+   XCollectionFormat  string         `json:"x-collectionFormat,omitempty"`
+
    // Custom stonelizard extension. Specifies the type of the key. Used for key-value data types
-   XKeyType string `json:"x-keytype,omitempty"`
+   XKeyType    string `json:"x-keytype,omitempty"`
+
+   // Custom stonelizard extension. Specifies the format of the key. Used for key-value data types
+   XKeyFormat  string `json:"x-keyformat,omitempty"`
 }
 
 type SwaggerItemT struct {
@@ -685,7 +692,7 @@ type SwaggerParameterT struct {
    Type              string         `json:"type,omitempty"`
 
    // Required if type is "array". Describes the type of items in the array.
-   Items            *SwaggerItemT   `json:"items,omitempty"`
+//   Items            *SwaggerItemT   `json:"items,omitempty"`
 
    // The extending format for the previously mentioned type. See Data Type Formats for further details.
    Format            string         `json:"format,omitempty"`

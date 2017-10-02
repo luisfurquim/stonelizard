@@ -58,18 +58,18 @@ func ParseFieldList(listEncoding string, parmcountIn int, fld reflect.StructFiel
          SwaggerParameter.Schema   = nil
 
          if pt.Kind() == reflect.Map {
-            if SwaggerParameter.Items == nil {
-               SwaggerParameter.Items = &SwaggerItemT{}
+            SwaggerParameter.Schema   = &SwaggerSchemaT{
+               Items: &SwaggerSchemaT{},
             }
             kname := pt.Key().Name()
             if kname == "string" {
-               SwaggerParameter.Items.XKeyType = "string"
+               SwaggerParameter.Schema.Items.XKeyType = "string"
             } else {
-               SwaggerParameter.Items.XKeyType   = "integer"
+               SwaggerParameter.Schema.Items.XKeyType   = "integer"
                if kname[len(kname)-2:] == "64" {
-                  SwaggerParameter.Items.XKeyFormat = "int64"
+                  SwaggerParameter.Schema.Items.XKeyFormat = "int64"
                } else {
-                  SwaggerParameter.Items.XKeyFormat = "int32"
+                  SwaggerParameter.Schema.Items.XKeyFormat = "int32"
                }
             }
          }

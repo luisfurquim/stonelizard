@@ -64,7 +64,8 @@ func GetWebSocketSpec(field reflect.StructField, WSMethodName string, WSMethod r
       }
 
       // Currently, we do not allow aggregated types
-      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
+//      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
+      if (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
          Goose.New.Logf(1,"%s: sch_req:%#v %#v",parmName,SwaggerParameter.Schema.Required,SwaggerParameter)
          return nil, ErrorInvalidParameterType
       }
