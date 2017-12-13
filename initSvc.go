@@ -81,8 +81,16 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
    if ok {
       resp.SavePending = func(info interface{}) error {
          var err error
+         var this reflect.Value
 
-         errIFace := met.Func.Call([]reflect.Value{reflect.ValueOf(resp.Config),reflect.ValueOf(info)})[0].Interface()
+         this = reflect.ValueOf(resp.Config)
+
+         if this.Kind() == reflect.Ptr {
+            Goose.Auth.Logf(1,"Dereferencing SavePending: %#v",this)
+            this = this.Elem()
+         }
+
+         errIFace := met.Func.Call([]reflect.Value{this,reflect.ValueOf(info)})[0].Interface()
          switch errIFace.(type) {
             case error:
                err = errIFace.(error)

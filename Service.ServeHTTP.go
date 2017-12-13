@@ -4,6 +4,7 @@ import (
    "io"
    "fmt"
    "sync"
+   "runtime"
    "strings"
    "reflect"
    "net/http"
@@ -15,11 +16,10 @@ import (
 )
 
 func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-   var match                []string
    var parms                []interface{}
    var authparms              map[string]interface{}
-   var i, j                   int
-   var endpoint               UrlNode
+   var j                      int
+   var endpoint              *UrlNode
    var resp                   Response
    var ok                     bool
    var err                    error
@@ -35,6 +35,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var httpstat               int
    var authinfo               interface{}
    var useWebSocket           bool
+   var cryp                   string
+   var httpStatus             int
 
    Goose.Serve.Logf(1,"Access %s from %s", r.URL.Path, r.RemoteAddr)
 
@@ -72,33 +74,15 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   match = svc.Matcher.FindStringSubmatch(r.Method+":"+r.URL.Path)
-   Goose.Serve.Logf(6,"Matcher found this %#v\n", match)
-   if len(match) == 0 {
-      Goose.Serve.Logf(1,"Invalid service handler " + r.URL.Path)
-      w.WriteHeader(http.StatusBadRequest)
-      w.Write([]byte("Invalid service handler " + r.URL.Path))
-      return
+   if r.TLS != nil {
+      cryp = "S"
    }
 
-   parms = []interface{}{}
-   authparms = map[string]interface{}{}
-
-//   for _, endpoint = range svc.Svc {
-   for i=1; i<len(match); i++ {
-      Goose.Serve.Logf(5,"trying %s:%s with endpoint: %s",r.Method,r.URL.Path,svc.Svc[svc.MatchedOps[i-1]].Path)
-      if len(match[i]) > 0 {
-         Goose.Serve.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,r.URL.Path)
-         endpoint = svc.Svc[svc.MatchedOps[i-1]]
-         for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
-            authparms[endpoint.ParmNames[j-i-1]] = match[j]
-         }
-         for k := i+1; k<j; k++ { // parms = []interface{}(match[i+1:j])
-            parms = append(parms,match[k])
-         }
-         j -= i + 1
-         break
-      }
+   endpoint, parms, authparms, httpStatus = svc.FetchEndpointHandler(cryp, r.Proto, r.Method, r.URL.Path)
+   if httpStatus > 0 {
+      w.WriteHeader(httpStatus)
+      w.Write([]byte(fmt.Sprintf("Invalid service handler: %s", r.URL.Path)))
+      return
    }
 
    Goose.Serve.Logf(5,"Original parms: %#v",parms)
@@ -120,7 +104,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       r.ParseForm()
       for _, qry = range endpoint.Query {
          if _, ok := r.Form[qry]; !ok {
-            Goose.Serve.Logf(1,"%s: %s",ErrorMissingRequiredQueryField,qry)
+            errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredQueryField,qry)
+            Goose.Serve.Logf(1,errmsg)
+            w.WriteHeader(http.StatusBadRequest)
+            w.Write([]byte(errmsg))
             return
          }
          parms = append(parms,r.Form[qry][0]) // TODO array support
@@ -133,8 +120,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    for _, header = range endpoint.Headers {
       if (r.Header[header]==nil) || (len(r.Header[header])==0) {
-         Goose.Serve.Logf(1,"%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredHTTPHeader,header)
+         Goose.Serve.Logf(1,errmsg)
          Goose.Serve.Logf(6,"HTTP Headers found: %#v",r.Header)
+         w.WriteHeader(http.StatusBadRequest)
+         w.Write([]byte(errmsg))
          return
       }
       parms = append(parms,r.Header[header][0]) // TODO array support
@@ -156,11 +146,17 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //      Goose.Serve.Logf(6,"body=%s",bdy)
       umrsh, err = NewMultipartUnmarshaler(r,endpoint.Body)
       if err != nil {
-         Goose.Serve.Logf(1,"Error initializing multipart/formdata unmarshaller for %s: %s", r.URL.Path, err)
+         errmsg := fmt.Sprintf("Error initializing multipart/formdata unmarshaller for %s: %s", r.URL.Path, err)
+         Goose.Serve.Logf(1,errmsg)
+         w.WriteHeader(http.StatusBadRequest)
+         w.Write([]byte(errmsg))
          return
       }
    } else {
-      Goose.Serve.Logf(1,"Internal server error determining input mimetype")
+      errmsg := fmt.Sprintf("Unsupported input mimetype")
+      Goose.Serve.Logf(1,errmsg)
+      w.WriteHeader(http.StatusBadRequest)
+      w.Write([]byte(errmsg))
       return
    }
 
@@ -204,13 +200,58 @@ gzipcheck:
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type","text/html; charset=utf-8")
    } else {
-      Goose.Serve.Logf(1,"Internal server error determining response mimetype")
+      errmsg := fmt.Sprintf("Internal server error determining response mimetype")
+      Goose.Serve.Logf(1,errmsg)
+      w.WriteHeader(http.StatusInternalServerError)
+      w.Write([]byte(errmsg))
       return
    }
 
    Goose.Serve.Logf(5,"svc.Access: %d",svc.Access)
    err = nil
    if svc.Access != AccessNone {
+
+      defer func() {
+         // Tries to survive to any panic from the application.
+         // Additionally, tries to extract useful data from the panic message and log it.
+         // This is needed because the panic message is too long and have newlines in it,
+         // when such messages reach the system log, only the first line goes into the log.
+         // In my experience, the most needed data is where in my code the panic ocurred,
+         // so here we search for the first line referencing a GOLANG sourcecode which is not
+         // a system package and select it to put in the log
+         // TODO: add the error message to the log too
+         if panicerr := recover(); panicerr != nil {
+            const size = 64 << 10
+            var buf []byte
+            var srcs, srcs2 []string
+            var src string
+            var i int
+
+            buf  = make([]byte, size)
+            buf  = buf[:runtime.Stack(buf, false)]
+            srcs = strings.Split(string(buf),"\n")
+            for _, src = range srcs {
+               if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
+                  srcs2 = append(srcs2,gosrcFNameRE.FindStringSubmatch(src)[1])
+               }
+            }
+
+            src = strings.Join(srcs2,", ")
+
+            if len(src) == 0 {
+               for i=len(srcs)-1; i>0; i-- {
+                  Goose.Serve.Logf(0,"panic loop %d/%d", i, len(srcs))
+                  src = srcs[i]
+                  if len(src) > 0 {
+                     break
+                  }
+               }
+            }
+
+            Goose.Serve.Logf(0,"panic (%s): calling %s -> %s with %s @ %s", panicerr, endpoint.Path, authparms, src)
+         }
+      }()
+
       httpstat, authinfo, err = svc.Authorizer.Authorize(endpoint.Path, authparms, r.RemoteAddr, r.TLS, svc.SavePending)
    }
 
@@ -219,7 +260,6 @@ gzipcheck:
       if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo {
          authinfo = nil
       }
-
 
       for _, p := range endpoint.Proto {
          if p=="ws" || p=="wss" {
@@ -414,7 +454,7 @@ gzipcheck:
       if httpstat != http.StatusNoContent {
          err = mrsh.Encode(fmt.Sprintf("%s",err))
          if err!=nil {
-            Goose.Serve.Logf(1,"Internal server error writing response body (no status sent to client): %s",err)
+            Goose.Serve.Logf(1,"Internal server error writing response body (no body sent to client): %s",err)
             return
          }
       }

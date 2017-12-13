@@ -20,6 +20,9 @@ func (svc *Service) ListenAndServeTLS() error {
    var p        string
    var auth     AuthT
    var tc      *tls.Config
+   var mux     *http.ServeMux
+   var path     string
+   var exported string
 
    // If the host/IP was not provided, get the hostname as provided by operating system
    if svc.Config.ListenAddress()[0] == ':' {
@@ -78,6 +81,7 @@ FindEncLoop:
       // Start the encrypted REST server
       go func() {
          var errsrv error
+
          defer wg.Done()
 
          // Get the configuration options for the encrypted service
@@ -89,10 +93,26 @@ FindEncLoop:
             return
          }
 
+         Goose.InitServe.Logf(2,"Adding http web service handler")
+         mux = http.NewServeMux()
+         mux.Handle("/",svc)
+
+         for path, exported = range svc.SecureStatic {
+            if path[len(path)-1] != '/' {
+               path += "/"
+            }
+            Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
+            mux.Handle(path,FileServerHandlerT{
+               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
+               svc:svc,
+               path:path,
+               })
+         }
+
          // Configure the server
          srv := &http.Server{
             Addr: hn + svc.Config.ListenAddress(),
-            Handler: svc,
+            Handler: mux,
             TLSConfig: tc,
          }
 
@@ -102,10 +122,10 @@ FindEncLoop:
          // Start the server
          errsrv = srv.Serve(crypls)
          if errsrv != nil {
-            Goose.InitServe.Logf(5,"Error starting service listener: %s", errsrv)
+            Goose.InitServe.Logf(1,"Error starting service listener: %s", errsrv)
             err = errsrv
          } else {
-            Goose.InitServe.Logf(5,"Service started listening")
+            Goose.InitServe.Logf(2,"Service started listening")
          }
       }()
 
@@ -115,10 +135,26 @@ FindEncLoop:
    } else if useHttp { // TODO: provide 2 listeners and change this XOR to an OR
       // Start the plain text REST server
 
+      Goose.InitServe.Logf(2,"Adding http web service handler")
+      mux = http.NewServeMux()
+      mux.Handle("/",svc)
+
+      for path, exported = range svc.PlainStatic {
+         if path[len(path)-1] != '/' {
+            path += "/"
+         }
+         Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
+         mux.Handle(path,FileServerHandlerT{
+            hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
+            svc:svc,
+            path:path,
+            })
+      }
+
       // Configure the server
       srv := &http.Server{
          Addr: hn + svc.Config.ListenAddress(),
-         Handler: svc,
+         Handler: mux,
       }
 
       // Start the server

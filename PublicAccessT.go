@@ -92,6 +92,10 @@ func (pa PublicAccessT) LoadUserData() error {
    return nil
 }
 
+func (pa PublicAccessT) AddUserData(usrKey string, ClientCert *x509.Certificate) error {
+   return nil
+}
+
 func (pa PublicAccessT) Trust(id string) error {
    return nil
 }

@@ -3,6 +3,7 @@ package certkitetcd
 import (
 //   "os"
    "fmt"
+   "hash"
    "bytes"
    "errors"
    "net/http"
@@ -10,6 +11,7 @@ import (
    "crypto/tls"
    "crypto/rsa"
    "crypto/x509"
+   "crypto/sha1"
    "encoding/pem"
    "golang.org/x/net/context"
    "github.com/luisfurquim/stonelizard"
@@ -18,23 +20,76 @@ import (
 )
 
 func certKey(cert *x509.Certificate) string {
-   return fmt.Sprintf("%s_%2x", cert.EmailAddresses[0], cert.AuthorityKeyId)
+   var k string
+   var hak, hsk hash.Hash
+
+   if len(cert.EmailAddresses)>0 {
+      k = cert.EmailAddresses[0]
+   } else {
+      k = cert.Subject.CommonName
+   }
+
+   hak = sha1.New()
+	hak.Write(cert.AuthorityKeyId)
+   hsk = sha1.New()
+	hak.Write(cert.SubjectKeyId)
+
+   return fmt.Sprintf("%s_%2x_%2x", k, hak.Sum(nil), hsk.Sum(nil))
+}
+
+func keyHash(issuer []byte) string {
+   var h hash.Hash
+
+   h = sha1.New()
+	h.Write(issuer)
+
+   return string(h.Sum(nil))
 }
 
 func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {
    var cert       *x509.Certificate
    var User       *UserDB
+   var issuer      string
+   var subj        string
    var CertKey     string
    var found       bool
    var ok          bool
    var commonName  string
+   var issuers     map[string]struct{}
+   var users       map[string]*x509.Certificate
 
    Goose.Auth.Logf(5,"Peer certificates")
-   found = false
+   found   = false
+   issuers = map[string]struct{}{}
+   users   = map[string]*x509.Certificate{}
+
    for _, cert = range TLS.PeerCertificates {
-      Goose.Auth.Logf(6,"Peer certificate: %#v",cert)
-      Goose.Auth.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      if cert.IsCA {
+         continue
+      }
+      Goose.Auth.Logf(5,"Peer certificate: %#v",cert)
+      Goose.Auth.Logf(6,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      issuer = keyHash(cert.AuthorityKeyId)
+      subj = keyHash(cert.SubjectKeyId)
+
+      if _, ok = users[issuer]; ok {
+         delete(users,issuer)
+      }
+
+      issuers[issuer] = struct{}{}
+
+      if _, ok = issuers[subj]; !ok {
+         users[subj] = cert
+      }
+   }
+
+   for _, cert = range users {
+      Goose.Auth.Logf(6,"Peer certificate.1: %#v",cert)
+      Goose.Auth.Logf(5,"Peer certificate.1: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       CertKey = certKey(cert)
+      if CertKey == "" {
+         continue
+      }
       if User, ok = ck.UserCerts[CertKey]; ok {
          if bytes.Equal(User.Cert.Raw,cert.Raw) {
             found = true
@@ -52,16 +107,16 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
       return http.StatusOK, cert, nil
    }
 
-   Goose.Auth.Logf(1,"Unauthorized access attempt from %s to path %s", RemoteAddr, path)
-   Goose.Auth.Logf(6,"Unauthorized access attempt, certs: %#v",TLS.PeerCertificates)
-   for _, cert = range TLS.PeerCertificates {
-      Goose.Auth.Logf(4,"Sent access cert (needs authorization): %#v",cert.Subject)
-   }
+   Goose.Auth.Logf(1,"Unauthorized access attempt from %s@%s to path %s", cert.Subject.CommonName, RemoteAddr, path)
+   Goose.Auth.Logf(6,"Unauthorized access attempt, cert: %#v",cert)
+   Goose.Auth.Logf(4,"Sent access cert (needs authorization): %#v",cert.Subject)
+
    for commonName, _ = range ck.UserCerts {
       Goose.Auth.Logf(4,"access grantable to: %s",commonName)
    }
 
    if cert != nil {
+      Goose.Auth.Logf(1,"SavePending :%#v",SavePending)
       // Shaper interface has an optional method: SavePending(cert *x509.Certificate) error
       err = SavePending(cert)
       if err != nil {

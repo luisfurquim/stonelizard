@@ -120,7 +120,11 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                httpResp.Status = http.StatusInternalServerError
                httpResp.Body   = "Internal server error"
                httpResp.Header = map[string]string{}
-               Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %s",err,postvalue.Elem().Interface())
+               if postvalue.Kind() == reflect.Ptr && !postvalue.IsNil() {
+                  Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %#v",err,postvalue.Elem().Interface())
+               } else {
+                  Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %#v",err,postvalue.Interface())
+               }
                return httpResp
             }
             if err != io.EOF {
@@ -147,7 +151,11 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
 
       // Checks if the calling parameter count matches the method parameter count
       if len(ins) != met.Type.NumIn() {
-         errmsg = fmt.Sprintf("Operation call with wrong input argument count: received:%d, expected:%d",len(ins), met.Type.NumIn())
+         var sdbg string
+         for _, in := range ins[1:] {
+            sdbg += fmt.Sprintf("[%s], ",in.Interface())
+         }
+         errmsg = fmt.Sprintf("Operation call with wrong input argument count: expected:%d, received:%d -> %s", met.Type.NumIn(), len(ins), sdbg)
          Goose.OpHandle.Logf(1,errmsg)
          return Response {
             Status:            http.StatusBadRequest,

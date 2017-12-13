@@ -1,6 +1,7 @@
 package stonelizard
 
 import (
+   "os"
    "fmt"
    "regexp"
    "errors"
@@ -66,6 +67,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var pos                      int
 //   var webSocketOps map[string]*SwaggerWSOperationT
 //   var webSocketSpec           *SwaggerWSOperationT
+   var static                   string
+   var exported                 string
+   var exportedValue          []reflect.Value
+   var this                     reflect.Value
 
    for _, svc = range svcs {
 
@@ -88,6 +93,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
          if resp == nil {
             continue // If we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
          }
+
+         resp.SecureStatic = map[string]string{}
+         resp.PlainStatic = map[string]string{}
       }
 
       typ = reflect.ValueOf(svcElem).Type()
@@ -256,7 +264,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             swaggerParameters = []SwaggerParameterT{}
 
-            re = "^" + strings.ToUpper(httpmethod) + ":/" + svcRoot
+//            re = "^" + strings.ToUpper(httpmethod) + ":/" + svcRoot
+            re = svcRoot
 
             parmcount = 0
             parmnames = []string{}
@@ -471,37 +480,39 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
 */
 
-            Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
+            for _, prt := range proto {
+               rePrtMethod := strings.ToUpper("^" + prt + "\\+" + httpmethod + ":/")
 
-            resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
-            reComp                           = regexp.MustCompile(re)
-            MatchedOpsIndex                 += reComp.NumSubexp() + 1
+               Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
+
+               resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+               reComp                           = regexp.MustCompile(rePrtMethod + re)
+               MatchedOpsIndex                 += reComp.NumSubexp() + 1
 
 /*
-            switch strings.ToLower(fld.Tag.Get("access")) {
-               case "none":     accesstype = AccessNone
-               case "auth":     accesstype = AccessAuth
-               case "authinfo": accesstype = AccessAuthInfo
-               default:         accesstype = AccessAuth
-            }
+               switch strings.ToLower(fld.Tag.Get("access")) {
+                  case "none":     accesstype = AccessNone
+                  case "auth":     accesstype = AccessAuth
+                  case "authinfo": accesstype = AccessAuthInfo
+                  default:         accesstype = AccessAuth
+               }
 */
 
-            pos = len(resp.Svc)
+               pos = len(resp.Svc)
 
-            resp.Svc = append(resp.Svc,UrlNode{
-               Proto:     proto,
-               Path:      path,
-               consumes:  consumes,
-               produces:  produces,
-               Headers:   headers,
-               Query:     query,
-               Body:      postFields,
-               ParmNames: parmnames,
-               Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
-//               Access:    resp.Access,
-            })
+               resp.Svc = append(resp.Svc,UrlNode{
+                  Proto:     []string{prt},
+                  Path:      path,
+                  consumes:  consumes,
+                  produces:  produces,
+                  Headers:   headers,
+                  Query:     query,
+                  Body:      postFields,
+                  ParmNames: parmnames,
+                  Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
+   //               Access:    resp.Access,
+               })
 
-            for _, prt := range proto {
                if prt[0:2] == "ws" { // if this is a web service handler
                   resp.Svc[pos].WSocketOperations, resp.Swagger.Paths[path][strings.ToLower(httpmethod)].XWSOperations, err = buildSubHandles(fldType,strings.Split(produces,","),strings.Split(consumes,","))
                   if err != nil {
@@ -513,42 +524,94 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      return nil, err
                   }
                }
-            }
 
-            reAllOps += "|(" + re + ")"
-            Goose.New.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
+               reAllOps += "|(" + rePrtMethod + re + ")"
+               Goose.New.Logf(6,"Partial Matcher for %s is %s",path,reAllOps)
 
-            if resp.EnableCORS {
-               index := len(resp.Svc)
-               if optIndex == nil {
-                  optIndex = map[string]int{path:index}
-               } else if index, ok = optIndex[path]; ok {
-                  for _, HdrNew = range headers {
-                     for _, HdrOld = range resp.Svc[index].Headers {
-                        if HdrOld == HdrNew {
-                           break
+               if resp.EnableCORS {
+                  index := len(resp.Svc)
+                  if optIndex == nil {
+                     optIndex = map[string]int{path:index}
+                  } else if index, ok = optIndex[path]; ok {
+                     for _, HdrNew = range headers {
+                        for _, HdrOld = range resp.Svc[index].Headers {
+                           if HdrOld == HdrNew {
+                              break
+                           }
+                        }
+                        if HdrOld != HdrNew {
+                           resp.Svc[index].Headers = append(resp.Svc[index].Headers, HdrNew)
                         }
                      }
-                     if HdrOld != HdrNew {
-                        resp.Svc[index].Headers = append(resp.Svc[index].Headers, HdrNew)
-                     }
+                     continue
+                  } else {
+                     optIndex[path] = len(resp.Svc)
                   }
-                  continue
-               } else {
-                  optIndex[path] = len(resp.Svc)
+
+                  reCORS := "^" + strings.ToUpper(prt) + "\\+OPTIONS:/" + re
+                  resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+                  reComp                           = regexp.MustCompile(reCORS)
+                  MatchedOpsIndex                 += reComp.NumSubexp() + 1
+
+                  resp.Svc = append(resp.Svc,UrlNode{
+                     Path: path,
+                     Headers: headers,
+                  })
+                  reAllOps += "|(" + reCORS + ")"
                }
-
-               re = "^OPTIONS" + re[len(httpmethod)+1:]
-               resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
-               reComp                           = regexp.MustCompile(re)
-               MatchedOpsIndex                 += reComp.NumSubexp() + 1
-
-               resp.Svc = append(resp.Svc,UrlNode{
-                  Path: path,
-                  Headers: headers,
-               })
-               reAllOps += "|(" + re + ")"
                Goose.New.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
+            }
+         } else {
+            Goose.New.Logf(2,"Checking %s for static handlers",fld.Name)
+            static = fld.Tag.Get("path")
+            if static == "" {
+               continue
+            }
+
+            Goose.New.Logf(2,"Checking %s for static handlers has path %s", fld.Name, static)
+            exported = fld.Tag.Get("export")
+            if exported =="" {
+               continue
+            }
+
+            Goose.New.Logf(2,"Checking %s for static handlers exports %s", fld.Name, exported)
+            methodName = strings.ToUpper(fld.Name[:1]) + fld.Name[1:]
+            if method, ok = typ.MethodByName(methodName); !ok {
+               Goose.New.Logf(1,"Checking %s for static handlers for method %s not found", fld.Name, methodName)
+               continue
+            }
+
+            Goose.New.Logf(2,"Checking %s for static handlers has defined method", fld.Name)
+            this = reflect.ValueOf(svc)
+            if this.Kind() == reflect.Ptr {
+               this = this.Elem()
+            }
+
+            exportedValue = method.Func.Call([]reflect.Value{this})
+            if len(exportedValue) != 1 {
+               Goose.New.Logf(2,"Checking %s for static handlers has exportedValue %#v", fld.Name, exportedValue)
+               continue
+            }
+
+            switch e := exportedValue[0].Interface().(type) {
+            case string:
+               exported = strings.Replace(fmt.Sprintf("%s%s",e,exported),"/",string([]byte{os.PathSeparator}),-1)
+               Goose.New.Logf(2,"Checking %s for static handlers has full exported  %s", fld.Name, exported)
+            default:
+               continue
+            }
+
+            proto = strings.Split(fld.Tag.Get("proto"),",")
+            if len(proto) == 0 || proto[0]=="" {
+               proto = svcProto
+            }
+
+            for _, p := range proto {
+               if p == "https" {
+                  resp.SecureStatic[static] = exported
+               } else if p == "http" {
+                  resp.PlainStatic[static] = exported
+               }
             }
          }
       }
