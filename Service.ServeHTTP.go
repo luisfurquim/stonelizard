@@ -196,9 +196,9 @@ gzipcheck:
    } else if endpoint.produces == "application/xml" {
       mrsh = xml.NewEncoder(outWriter)
       hd.Add("Content-Type","application/xml")
-   } else if (endpoint.produces == "text/html") || (endpoint.produces == "text/javascript") || (endpoint.produces == "application/javascript") {
+   } else if (endpoint.produces == "text/css") || (endpoint.produces == "text/html") || (endpoint.produces == "text/javascript") || (endpoint.produces == "application/javascript") {
       mrsh = NewStaticEncoder(outWriter)
-      hd.Add("Content-Type","text/html; charset=utf-8")
+      hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
    } else {
       errmsg := fmt.Sprintf("Internal server error determining response mimetype")
       Goose.Serve.Logf(1,errmsg)

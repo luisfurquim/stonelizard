@@ -53,7 +53,7 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    }()
 
 
-   Goose.Serve.Logf(5,"svc.Access: %d",fs.svc.Access)
+   Goose.Serve.Logf(0,"svc.Access: %s from %s with level %d", r.RequestURI,  r.RemoteAddr, fs.svc.Access)
    if fs.svc.Access != AccessNone {
       httpstat, _, err = fs.svc.Authorizer.Authorize(fs.path, nil, r.RemoteAddr, r.TLS, fs.svc.SavePending)
       if err != nil {
