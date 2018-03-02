@@ -71,6 +71,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var exported                 string
    var exportedValue          []reflect.Value
    var this                     reflect.Value
+   var num                      int
 
    for _, svc = range svcs {
 
@@ -394,16 +395,17 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                pt = nil
             }
 
+            num = method.Type.NumIn()
             if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
-               if (parmcount+1) != method.Type.NumIn() {
+               if (parmcount+1) != num {
                   parmcount++
-                  if (parmcount+1) != method.Type.NumIn() {
-                     return nil, errors.New("Wrong parameter (with info) count at method " + methodName)
+                  if (parmcount != (num-3)) || (num<2) || (method.Type.In(num-2).Kind()!=reflect.String) || (method.Type.In(num-1).Kind()!=reflect.String) {
+                     return nil, errors.New(fmt.Sprintf("Wrong parameter (with info) count at method %s, got %d want %d",methodName,parmcount,num))
                   }
                }
             } else {
-               if (parmcount+1) != method.Type.NumIn() {
-                  return nil, errors.New("Wrong parameter count at method " + methodName)
+               if (parmcount+1) != num {
+                  return nil, errors.New(fmt.Sprintf("Wrong parameter count at method %s, got %d want %d",methodName,parmcount,num))
                }
             }
 

@@ -37,8 +37,10 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var useWebSocket           bool
    var cryp                   string
    var httpStatus             int
+   var proto                  string
 
-   Goose.Serve.Logf(1,"Access %s from %s", r.URL.Path, r.RemoteAddr)
+   Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
+   Goose.Serve.Logf(1,"Goose/stonelizard/Serve %d", uint8(Goose.Serve))
 
    if r.URL.Path=="/crtlogin" {
       w.WriteHeader(http.StatusOK)
@@ -46,9 +48,28 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
+   if r.TLS != nil {
+      cryp = "S"
+   }
+
    hd := w.Header()
    hd.Add("Access-Control-Allow-Origin","*")
    hd.Add("Vary","Origin")
+
+
+   for _hd, val := range r.Header {
+      Goose.Serve.Logf(1,"Header %s:%#v",_hd, val)
+   }
+
+   proto = strings.Split(r.Proto,"/")[0]
+   Goose.Serve.Logf(1,"Going to check if it is a websocket connection")
+   for _, upg := range r.Header["Upgrade"] {
+      Goose.Serve.Logf(1,"Header Upgrade:%s",upg)
+      if upg == "websocket" {
+         proto = "WS" + cryp
+         useWebSocket = true
+      }
+   }
 
    Goose.Serve.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
@@ -74,11 +95,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   if r.TLS != nil {
-      cryp = "S"
-   }
-
-   endpoint, parms, authparms, httpStatus = svc.FetchEndpointHandler(cryp, r.Proto, r.Method, r.URL.Path)
+   endpoint, parms, authparms, httpStatus = svc.FetchEndpointHandler(proto, r.Method, r.URL.Path)
    if httpStatus > 0 {
       w.WriteHeader(httpStatus)
       w.Write([]byte(fmt.Sprintf("Invalid service handler: %s", r.URL.Path)))
@@ -261,14 +278,7 @@ gzipcheck:
          authinfo = nil
       }
 
-      for _, p := range endpoint.Proto {
-         if p=="ws" || p=="wss" {
-            useWebSocket = true
-            break
-         }
-      }
-
-      resp = endpoint.Handle(parms,umrsh,authinfo)
+      resp = endpoint.Handle(parms,umrsh,authinfo,r.Host,r.RemoteAddr)
       if useWebSocket && resp.Status < http.StatusMultipleChoices && resp.Status >= http.StatusOK {
          websocket.Handler(func (ws *websocket.Conn) {
             //endpoint.Handle(parms,umrsh,authinfo)
@@ -289,6 +299,8 @@ gzipcheck:
             var ev *WSEventTrigger
             var i int
             var evName interface{}
+            var sIns string
+            var rval reflect.Value
 
             if endpoint.consumes == "application/json" {
                codec = websocket.JSON
@@ -409,8 +421,22 @@ gzipcheck:
                      break
                   }
 
+                  for _, rval = range ins {
+                     sIns += fmt.Sprintf("%#v, ",rval.Interface())
+                  }
+                  if len(sIns) > 0 {
+                     sIns = sIns[:len(sIns)-2]
+                  }
+                  Goose.OpHandle.Logf(5,"Calling websocket operation with: %s",sIns)
                   retData := op.Method.Func.Call(ins)
-                  Goose.OpHandle.Logf(5,"retData: %#v",retData)
+                  sIns = ""
+                  for _, rval = range retData {
+                     sIns += fmt.Sprintf("%#v, ",rval.Interface())
+                  }
+                  if len(sIns) > 0 {
+                     sIns = sIns[:len(sIns)-2]
+                  }
+                  Goose.OpHandle.Logf(5,"Websocket operation retData: %s",retData)
 
                   WSResponse = retData[0].Interface().(Response)
 

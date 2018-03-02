@@ -6,7 +6,7 @@ import (
    "net/http"
 )
 
-func (svc *Service) FetchEndpointHandler(crypto, proto, method, path string) (*UrlNode, []interface{}, map[string]interface{}, int) {
+func (svc *Service) FetchEndpointHandler(proto, method, path string) (*UrlNode, []interface{}, map[string]interface{}, int) {
    var i, j int
    var pathId string
    var match []string
@@ -14,7 +14,7 @@ func (svc *Service) FetchEndpointHandler(crypto, proto, method, path string) (*U
    var authparms map[string]interface{}
    var endpoint UrlNode
 
-   pathId = fmt.Sprintf("%s%s+%s:%s", strings.Split(proto,"/")[0], crypto, method, path)
+   pathId = fmt.Sprintf("%s+%s:%s", strings.Split(proto,"/")[0], method, path)
 
    Goose.Serve.Logf(6,"Matcher will look on %#v", svc.Matcher)
    Goose.Serve.Logf(6,"Matcher will look for [%s]", pathId)

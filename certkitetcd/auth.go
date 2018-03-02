@@ -187,7 +187,7 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
 */
 
    tlsConfig.Certificates[0] = ck.ServerX509KeyPair
-   Goose.Auth.Logf(5,"X509KeyPair used: %#v",tlsConfig.Certificates[0])
+   Goose.Auth.Logf(7,"X509KeyPair used: %#v",tlsConfig.Certificates[0])
    tlsConfig.BuildNameToCertificate()
 
    return tlsConfig, nil
@@ -248,7 +248,7 @@ func (ck *CertKit) SavePending(cert *x509.Certificate) error {
 
    CertKey = certKey(cert)
    Goose.Auth.Logf(3,"User certificate of %s not authorized", CertKey)
-   Goose.Auth.Logf(6,"Certificate is %#v", cert)
+   Goose.Auth.Logf(7,"Certificate is %#v", cert)
 
    tgtpath = ck.Etcdkey + "/pending/" + CertKey
 
@@ -259,7 +259,7 @@ func (ck *CertKit) SavePending(cert *x509.Certificate) error {
    }
 
    Pem = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}))
-   Goose.Auth.Logf(6,"Pem Certificate is %#v", Pem)
+   Goose.Auth.Logf(7,"Pem Certificate is %#v", Pem)
    err = etcdconfig.SetKey(ck.Etcdcli, tgtpath + "/cert", Pem)
    if err != nil {
       Goose.Auth.Logf(1,"Error saving pending certificate (%s): %s",tgtpath,err)
@@ -285,7 +285,7 @@ func (ck *CertKit) Trust(id string) error {
       return err
    }
 
-   Goose.Auth.Logf(6,"etcddata %s: %#v", id, etcdData)
+   Goose.Auth.Logf(7,"etcddata %s: %#v", id, etcdData)
 
    _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), tgtpath, "", &etcd.SetOptions{Dir:true})
    if err != nil {
@@ -354,7 +354,7 @@ func (ck *CertKit) GetPending() (map[string]interface{}, error) {
    }
 
    _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey)
-   Goose.Auth.Logf(5,"etcdkey: %#v", etcdData)
+   Goose.Auth.Logf(6,"etcdkey: %#v", etcdData)
 
    _, etcdData, err = etcdconfig.GetConfig(ck.Etcdcli, ck.Etcdkey + "/pending")
    if err != nil {

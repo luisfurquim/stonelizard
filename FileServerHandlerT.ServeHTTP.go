@@ -40,7 +40,7 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
          if len(src) == 0 {
             for i=len(srcs)-1; i>0; i-- {
-               Goose.Serve.Logf(0,"panic loop %d/%d", i, len(srcs))
+               Goose.Serve.Logf(1,"panic loop %d/%d", i, len(srcs))
                src = srcs[i]
                if len(src) > 0 {
                   break
@@ -48,15 +48,16 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             }
          }
 
-         Goose.Serve.Logf(0,"panic (%s): calling %s -> %s @ %s", panicerr, r.URL.Path, src)
+         Goose.Serve.Logf(1,"panic (%s): calling %s -> %s @ %s", panicerr, r.URL.Path, src)
       }
    }()
 
 
-   Goose.Serve.Logf(0,"svc.Access: %s from %s with level %d", r.RequestURI,  r.RemoteAddr, fs.svc.Access)
+   Goose.Serve.Logf(2,"svc.Access: %s from %s with level %d", r.RequestURI,  r.RemoteAddr, fs.svc.Access)
    if fs.svc.Access != AccessNone {
       httpstat, _, err = fs.svc.Authorizer.Authorize(fs.path, nil, r.RemoteAddr, r.TLS, fs.svc.SavePending)
       if err != nil {
+         Goose.Serve.Logf(1,"svc.Access: %s from %s with level %d error: %s", r.RequestURI,  r.RemoteAddr, fs.svc.Access, err)
          w.WriteHeader(httpstat)
          w.Write([]byte(fmt.Sprintf("%s",err)))
          return

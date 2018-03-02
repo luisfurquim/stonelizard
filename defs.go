@@ -59,7 +59,7 @@ type gzHttpResponseWriter struct {
 
 type WSocketEventRegistry []*websocket.Conn
 
-type HandleHttpFn func ([]interface{}, Unmarshaler, interface{}) Response // Operation handler function, it calls the method defined by the application
+type HandleHttpFn func ([]interface{}, Unmarshaler, interface{}, string, string) Response // Operation handler function, it calls the method defined by the application
 type HandleWsFn   func ([]interface{}, Unmarshaler) Response // Operation handler function, it calls the method defined by the application
 
 type WSocketOperation struct {
