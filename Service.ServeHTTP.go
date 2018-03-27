@@ -61,7 +61,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       Goose.Serve.Logf(1,"Header %s:%#v",_hd, val)
    }
 
-   proto = strings.Split(r.Proto,"/")[0]
+   proto = strings.Split(r.Proto,"/")[0] + cryp
    Goose.Serve.Logf(1,"Going to check if it is a websocket connection")
    for _, upg := range r.Header["Upgrade"] {
       Goose.Serve.Logf(1,"Header Upgrade:%s",upg)
