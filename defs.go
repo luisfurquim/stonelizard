@@ -246,3 +246,5 @@ var Goose StonelizardG
 var WebSocketResponse Response
 var dummyWSEventTrigger *WSEventTrigger
 var typeWSEventTrigger reflect.Type = reflect.TypeOf(dummyWSEventTrigger)
+var isBase64DataURL *regexp.Regexp = regexp.MustCompile(`^data:[a-zA-Z0-9]+/[a-zA-Z0-9]+;base64,(.*)$`)
+

@@ -301,6 +301,8 @@ gzipcheck:
             var evName interface{}
             var sIns string
             var rval reflect.Value
+            var met reflect.Method
+            var ok bool
 
             if endpoint.consumes == "application/json" {
                codec = websocket.JSON
@@ -376,6 +378,10 @@ gzipcheck:
                   if parmOk {
                      Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))
                      codec.Send(ws, []interface{}{trackid, http.StatusOK})
+                     met, ok = obj.Type().MethodByName("OnBind")
+                     if ok {
+                        met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
+                     }
                   }
                } else if opName == "unbind" { // reserved word
                   parmOk := true
@@ -401,6 +407,10 @@ gzipcheck:
                   if parmOk {
                      Goose.Serve.Logf(3,"[%d] Websocket unbound event %s", evName.(string), trackid)
                      codec.Send(ws, []interface{}{trackid, http.StatusOK})
+                     met, ok = obj.Type().MethodByName("OnUnbind")
+                     if ok {
+                        met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
+                     }
                   }
                } else {
                   opi, err = endpoint.WSocketOperations.Get(opName)

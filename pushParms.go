@@ -30,11 +30,12 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
 
    for i, iface = range parms {
       parmType = met.Type.In(i+1)
-      Goose.OpHandle.Logf(1,"parsing parm %#v",iface)
+      Goose.OpHandle.Logf(0,"parsing parm %#v",iface)
 
       switch iface.(type) {
          case string:
             p = iface.(string)
+
             Goose.OpHandle.Logf(5,"parm: %d:%s",i+1,p)
             parmTypeName = parmType.Name()
 

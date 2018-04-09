@@ -7,6 +7,7 @@ import (
    "strings"
    "reflect"
    "net/http"
+   "encoding/base64"
 )
 
 
@@ -27,6 +28,8 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       var num int
       var rval reflect.Value
       var sIns string
+      var enc []string
+      var decoded []byte
 
       defer func() {
          // Tries to survive to any panic from the application.
@@ -131,6 +134,22 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                return httpResp
             }
             if err != io.EOF {
+
+               Goose.OpHandle.Logf(0,"postvalue.Kind() = %d",reflect.Indirect(postvalue).Kind())
+               Goose.OpHandle.Logf(0,"postvalue = %s",reflect.Indirect(postvalue).Interface())
+               if reflect.Indirect(postvalue).Kind() == reflect.String {
+                  enc = isBase64DataURL.FindStringSubmatch(reflect.Indirect(postvalue).Interface().(string))
+                  if len(enc) == 2 {
+                     Goose.OpHandle.Logf(0,"Data URL detected! %s",enc[1])
+                     decoded, err = base64.StdEncoding.DecodeString(enc[1])
+                     if err == nil {
+                        postvalue = reflect.ValueOf(string(decoded))
+                        Goose.OpHandle.Logf(0,"Data URL decoded! %s",postvalue.Interface())
+                     }
+                  }
+               }
+
+
                // Adds the post variable to the method parameter array
                Goose.OpHandle.Logf(6,"postvalue: %#v",postvalue)
                ins = append(ins,reflect.Indirect(postvalue))
