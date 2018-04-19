@@ -32,9 +32,9 @@ func (wset *WSEventTrigger) Trigger(data ...interface{}) (err error) {
    }
 
    // Send data to wsEventHandle.1 which has access to the HTTP/Websocket connection
-   Goose.Serve.Logf(1,"Send will send %#v",data)
+   Goose.Serve.Logf(4,"Send will send %#v",data)
    wset.EventData <- data
-   Goose.Serve.Logf(1,"Send has sent %#v",data)
+   Goose.Serve.Logf(5,"Send has sent data")
 
    return err
 }

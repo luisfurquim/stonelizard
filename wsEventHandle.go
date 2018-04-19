@@ -72,6 +72,7 @@ EventTriggerScan:
          go func(c reflect.Value, name string, types []reflect.Type) {
             var ok bool
             var v reflect.Value
+            var vtype reflect.Type
             var t reflect.Type
             var i int
             var err error
@@ -96,14 +97,21 @@ ExpectTrigger:
                   continue
                }
 
+               Goose.Serve.Logf(4,"Will check trigger parameter types")
                for i, t = range types {
-                  if t != v.Elem().Index(i).Elem().Type() {
-                     Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
-                     continue ExpectTrigger
+                  vtype = v.Elem().Index(i).Elem().Type()
+                  if t != vtype {
+                     Goose.Serve.Logf(4,"types differ (@%d), expected %s (Kind=%s) caught %s (Kind=%s)", i, t, t.Kind(), vtype, vtype.Kind())
+                     if (t.Kind() != reflect.Array && t.Kind() != reflect.Slice) ||
+                        (vtype.Kind() != reflect.Array && vtype.Kind() != reflect.Slice) ||
+                         !vtype.Elem().Implements(t.Elem()) {
+                        Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
+                        continue ExpectTrigger
+                     }
                   }
                }
 
-               Goose.Serve.Logf(1,"Event comm Recv: %#v",v.Interface())
+               Goose.Serve.Logf(4,"Event comm Recv: %#v",v.Interface())
                // event name , event data
                err = codec.Send(ws, []interface{}{0, name, v.Interface()})
                if err != nil {
