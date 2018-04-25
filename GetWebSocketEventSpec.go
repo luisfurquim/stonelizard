@@ -70,14 +70,14 @@ func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMet
          }
          switch tag[2] {
          // allowed types are these listed below
-         case "string", "number", "integer", "boolean", "array":
+         case "string", "number", "integer", "boolean", "array", "object":
             event.Parameters[1].Items[parmcount] = SwaggerEventParameterT{
                Name: tag[1],
                Type: tag[2],
                Required: true,
             }
 
-            if tag[2] == "array" {
+            if tag[2] == "array" || tag[2] == "object" {
                event.Parameters[1].Items[parmcount].Items = []SwaggerEventParameterT{
                   SwaggerEventParameterT{
                      Name: tag[1] + "...",

@@ -16,6 +16,7 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    var t reflect.Type
    var v reflect.Value
    var parmtypes []reflect.Type
+   var object struct{}
 
    // De-reference the object, if needed
    v = reflect.ValueOf(obj)
@@ -60,6 +61,8 @@ EventTriggerScan:
                   parmtypes = append(parmtypes,reflect.TypeOf(false))
                case "array":
                   parmtypes = append(parmtypes,reflect.TypeOf([]interface{}{}))
+               case "object":
+                  parmtypes = append(parmtypes,reflect.TypeOf(object))
                default:
                   Goose.Serve.Logf(1,"Error %s (%s), trigger not configured",WrongParameterType,tag[2])
                   continue EventTriggerScan
@@ -99,14 +102,25 @@ ExpectTrigger:
 
                Goose.Serve.Logf(4,"Will check trigger parameter types")
                for i, t = range types {
+                  if t.Kind() == reflect.Ptr {
+                     t = t.Elem()
+                  }
+                  Goose.Serve.Logf(4,"Got t: %#v",t)
                   vtype = v.Elem().Index(i).Elem().Type()
+                  if vtype.Kind() == reflect.Ptr {
+                     vtype = vtype.Elem()
+                  }
+                  Goose.Serve.Logf(4,"Got vtype: %#v",vtype)
                   if t != vtype {
                      Goose.Serve.Logf(4,"types differ (@%d), expected %s (Kind=%s) caught %s (Kind=%s)", i, t, t.Kind(), vtype, vtype.Kind())
                      if (t.Kind() != reflect.Array && t.Kind() != reflect.Slice) ||
                         (vtype.Kind() != reflect.Array && vtype.Kind() != reflect.Slice) ||
                          !vtype.Elem().Implements(t.Elem()) {
-                        Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
-                        continue ExpectTrigger
+                        if !(t.Kind() == reflect.Struct && vtype.Kind() == reflect.Struct) &&
+                           !(t.Kind() == reflect.Map && vtype.Kind() == reflect.Map) {
+                           Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
+                           continue ExpectTrigger
+                        }
                      }
                   }
                }

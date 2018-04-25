@@ -224,7 +224,7 @@ gzipcheck:
       return
    }
 
-   Goose.Serve.Logf(5,"svc.Access: %d",svc.Access)
+   Goose.Serve.Logf(5,"svc.Access level: %d",svc.Access)
    err = nil
    if svc.Access != AccessNone {
 
