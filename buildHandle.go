@@ -135,8 +135,8 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
             }
             if err != io.EOF {
 
-               Goose.OpHandle.Logf(0,"postvalue.Kind() = %d",reflect.Indirect(postvalue).Kind())
-               Goose.OpHandle.Logf(0,"postvalue = %s",reflect.Indirect(postvalue).Interface())
+               Goose.OpHandle.Logf(6,"postvalue.Kind() = %d",reflect.Indirect(postvalue).Kind())
+               Goose.OpHandle.Logf(5,"postvalue = %s",reflect.Indirect(postvalue).Interface())
                if reflect.Indirect(postvalue).Kind() == reflect.String {
                   enc = isBase64DataURL.FindStringSubmatch(reflect.Indirect(postvalue).Interface().(string))
                   if len(enc) == 2 {
