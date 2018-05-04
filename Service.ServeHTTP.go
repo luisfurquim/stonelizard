@@ -216,6 +216,9 @@ gzipcheck:
    } else if (endpoint.produces == "text/css") || (endpoint.produces == "text/html") || (endpoint.produces == "text/javascript") || (endpoint.produces == "application/javascript") {
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
+   } else if endpoint.produces == "application/octet-stream" {
+      mrsh = NewStaticEncoder(outWriter)
+      hd.Add("Content-Type","application/octet-stream")
    } else {
       errmsg := fmt.Sprintf("Internal server error determining response mimetype")
       Goose.Serve.Logf(1,errmsg)
