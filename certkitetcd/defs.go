@@ -48,4 +48,4 @@ var ErrorNoEtcdKey         = errors.New("No etcd key provided")
 var ErrorBadEtcdHandler    = errors.New("Bad etcd handler provided")
 var ErrorBadEtcdKey        = errors.New("Bad etcd key provided")
 var ErrorBadPEMBlock       = errors.New("Bad PEM block")
-
+var ErrorValidDate         = errors.New("Failed certificate has expired or not yet valid date")

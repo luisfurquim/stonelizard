@@ -50,6 +50,11 @@ func (crtkit CertKit) ReadCertFromReader(r io.Reader) (*x509.Certificate, []byte
       return nil, nil, err
    }
 
+   if time.Now().Before(cert.NotBefore) || time.Now().After(cert.NotAfter) {
+      Goose.Loader.Logf(1,"%s",ErrorValidDate)
+      return nil, nil, ErrorValidDate
+   }
+
    Goose.Loader.Logf(5,"Certificate was parsed")
 
    return cert, pembuf, nil
