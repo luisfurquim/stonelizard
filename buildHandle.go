@@ -63,7 +63,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
 
             if len(src) == 0 {
                for i=len(srcs)-1; i>0; i-- {
-                  Goose.Serve.Logf(0,"panic loop %d/%d", i, len(srcs))
+                  Goose.Serve.Logf(1,"panic loop %d/%d", i, len(srcs))
                   src = srcs[i]
                   if len(src) > 0 {
                      break
@@ -79,7 +79,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                parms += tmp
             }
 
-            Goose.Serve.Logf(0,"panic (%s): calling %s -> %s with %s @ %s", panicerr, met.PkgPath, met.Name, parms, src)
+            Goose.Serve.Logf(1,"panic (%s): calling %s -> %s with %s @ %s", panicerr, met.PkgPath, met.Name, parms, src)
          }
       }()
 
@@ -102,16 +102,16 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       if this.Type().Kind() == reflect.Struct {
          if _, ok := this.Type().FieldByName("Session"); ok {
             if this.Kind()==reflect.Ptr {
-               Goose.OpHandle.Logf(0,"THIS SESSION: %#v",this.Elem().FieldByName("Session"))
+               Goose.OpHandle.Logf(1,"THIS SESSION: %#v",this.Elem().FieldByName("Session"))
             } else {
-               Goose.OpHandle.Logf(0,"THIS SESSION: %#v",this.FieldByName("Session"))
+               Goose.OpHandle.Logf(1,"THIS SESSION: %#v",this.FieldByName("Session"))
             }
          }
       }
 
 
 //                  Goose.OpHandle.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
-      Goose.OpHandle.Logf(6,"posttype: %#v",posttype)
+      Goose.OpHandle.Logf(5,"posttype: %#v",posttype)
       if posttype != nil { // Adds data sent through HTTP POST
          err = nil
          j   = 0
@@ -133,27 +133,26 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                }
                return httpResp
             }
-            if err != io.EOF {
 
+            if err != io.EOF {
                Goose.OpHandle.Logf(6,"postvalue.Kind() = %d",reflect.Indirect(postvalue).Kind())
-               Goose.OpHandle.Logf(5,"postvalue = %s",reflect.Indirect(postvalue).Interface())
+               Goose.OpHandle.Logf(8,"postvalue = %s",reflect.Indirect(postvalue).Interface())
                if reflect.Indirect(postvalue).Kind() == reflect.String {
                   enc = isBase64DataURL.FindStringSubmatch(reflect.Indirect(postvalue).Interface().(string))
                   if len(enc) == 2 {
-                     Goose.OpHandle.Logf(0,"Data URL detected! %s",enc[1])
+                     Goose.OpHandle.Logf(6,"Data URL detected! %s",enc[1])
                      decoded, err = base64.StdEncoding.DecodeString(enc[1])
                      if err == nil {
                         postvalue = reflect.ValueOf(string(decoded))
-                        Goose.OpHandle.Logf(0,"Data URL decoded! %s",postvalue.Interface())
+                        Goose.OpHandle.Logf(8,"Data URL decoded! %s",postvalue.Interface())
                      }
                   }
                }
 
-
                // Adds the post variable to the method parameter array
-               Goose.OpHandle.Logf(6,"postvalue: %#v",postvalue)
+               Goose.OpHandle.Logf(8,"postvalue: %#v",postvalue)
                ins = append(ins,reflect.Indirect(postvalue))
-               Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
+               Goose.OpHandle.Logf(8,"ins: %d:%s",len(ins),ins)
 //               Goose.OpHandle.Logf(5,"ins2: %c-%c-%c-%c",(*postvalue.Interface().(*string))[0],(*postvalue.Interface().(*string))[1],(*postvalue.Interface().(*string))[2],(*postvalue.Interface().(*string))[3])
                j++
             }
@@ -164,11 +163,11 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
 
       // If the application required, we must provide the authenticated user information to the method.
       // This is done by adding it as the last parameter
-      Goose.OpHandle.Logf(5,"ins3: %d:%s",len(ins),ins)
+      Goose.OpHandle.Logf(8,"ins3: %d:%s",len(ins),ins)
       if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo{
-         Goose.OpHandle.Logf(5,"Checking the need for appending authinfo")
+         Goose.OpHandle.Logf(6,"Checking the need for appending authinfo")
          if (len(ins)+1) == num || (len(ins)+3) == num {
-            Goose.OpHandle.Logf(5,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
+            Goose.OpHandle.Logf(6,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
             ins = append(ins,reflect.ValueOf(authinfo))
          }
       }
@@ -187,7 +186,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
             if len(sIns) > 0 {
                sIns = sIns[:len(sIns)-2]
             }
-            Goose.OpHandle.Logf(5,"Operation has these parameters: this, %s",sIns)
+            Goose.OpHandle.Logf(8,"Operation has these parameters: this, %s",sIns)
          } else {
             for _, in := range ins[1:] {
                sdbg += fmt.Sprintf("[%s], ",in.Interface())
@@ -204,7 +203,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       // Finally calls the method
       retData := met.Func.Call(ins)
 
-      Goose.OpHandle.Logf(5,"retData: %#v",retData)
+      Goose.OpHandle.Logf(8,"retData: %#v",retData)
       return retData[0].Interface().(Response)
    }
 }

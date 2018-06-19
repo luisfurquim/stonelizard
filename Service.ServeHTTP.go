@@ -40,7 +40,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var proto                  string
 
    Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
-   Goose.Serve.Logf(1,"Goose/stonelizard/Serve %d", uint8(Goose.Serve))
 
    if r.URL.Path=="/crtlogin" {
       w.WriteHeader(http.StatusOK)
@@ -58,11 +57,11 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 
    for _hd, val := range r.Header {
-      Goose.Serve.Logf(1,"Header %s:%#v",_hd, val)
+      Goose.Serve.Logf(6,"Header %s:%#v",_hd, val)
    }
 
    proto = strings.Split(r.Proto,"/")[0] + cryp
-   Goose.Serve.Logf(1,"Going to check if it is a websocket connection")
+   Goose.Serve.Logf(6,"Going to check if it is a websocket connection")
    for _, upg := range r.Header["Upgrade"] {
       Goose.Serve.Logf(1,"Header Upgrade:%s",upg)
       if upg == "websocket" {
@@ -71,7 +70,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-   Goose.Serve.Logf(6,"Will check if swagger.json is requested: %#v",svc.Swagger)
+   Goose.Serve.Logf(7,"Will check if swagger.json is requested: %#v",svc.Swagger)
    if r.URL.Path=="/swagger.json" {
       defer func() {
          if r := recover(); r != nil {
@@ -102,7 +101,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   Goose.Serve.Logf(5,"Original parms: %#v",parms)
+   Goose.Serve.Logf(6,"Original parms: %#v",parms)
 
    if r.Method == "OPTIONS" {
       Goose.Serve.Logf(4,"CORS Options called on " + r.URL.Path)
@@ -133,7 +132,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-   Goose.Serve.Logf(5,"Parms with query: %#v",parms)
+   Goose.Serve.Logf(6,"Parms with query: %#v",parms)
 
    for _, header = range endpoint.Headers {
       if (r.Header[header]==nil) || (len(r.Header[header])==0) {
@@ -149,9 +148,9 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       j++
    }
 
-   Goose.Serve.Logf(5,"Parms with headers: %#v",parms)
+   Goose.Serve.Logf(6,"Parms with headers: %#v",parms)
 
-   Goose.Serve.Logf(5,"checking marshalers: %s, %s",endpoint.consumes,endpoint.produces)
+   Goose.Serve.Logf(5,"checking marshalers: cons:%s, prod:%s",endpoint.consumes,endpoint.produces)
 
    if endpoint.consumes == "application/json" {
       umrsh = json.NewDecoder(r.Body)
@@ -169,6 +168,12 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          w.Write([]byte(errmsg))
          return
       }
+   } else if len(endpoint.consumes)>=24  && endpoint.consumes[:24] == "application/octet-stream" {
+      if len(endpoint.consumes)>=31  && endpoint.consumes[24:31] == ";base64" {
+         umrsh = NewBase64Unmarshaler(r)
+      } else {
+         umrsh = NewDummyUnmarshaler(r)
+      }
    } else {
       errmsg := fmt.Sprintf("Unsupported input mimetype")
       Goose.Serve.Logf(1,errmsg)
@@ -184,13 +189,13 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    if encRequest, ok = r.Header["Accept-Encoding"] ; ok {
       Goose.Serve.Logf(6,"Accept-Encoding: %#v",encRequest)
       if svc.AllowGzip == true {
-         Goose.Serve.Logf(5,"svc.AllowGzip == true")
+         Goose.Serve.Logf(6,"svc.AllowGzip == true")
 gzipcheck:
          for _, enc = range encRequest {
             for _, e = range strings.Split(enc,", ") {
-               Goose.Serve.Logf(5,"Encoding: %s",e)
+               Goose.Serve.Logf(6,"Encoding: %s",e)
                if e == "gzip" {
-                  Goose.Serve.Logf(5,"Using gzip")
+                  Goose.Serve.Logf(6,"Using gzip")
                   gzw = gzip.NewWriter(w)
                   outWriter = gzHttpResponseWriter{
                      Writer: gzw,
@@ -241,14 +246,15 @@ gzipcheck:
          // a system package and select it to put in the log
          // TODO: add the error message to the log too
          if panicerr := recover(); panicerr != nil {
-            const size = 64 << 10
+            const size = 64 << 14
             var buf []byte
             var srcs, srcs2 []string
             var src string
             var i int
 
             buf  = make([]byte, size)
-            buf  = buf[:runtime.Stack(buf, false)]
+            i    = runtime.Stack(buf, false)
+            buf  = buf[:i]
             srcs = strings.Split(string(buf),"\n")
             for _, src = range srcs {
                if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
@@ -260,7 +266,7 @@ gzipcheck:
 
             if len(src) == 0 {
                for i=len(srcs)-1; i>0; i-- {
-                  Goose.Serve.Logf(0,"panic loop %d/%d", i, len(srcs))
+                  Goose.Serve.Logf(1,"panic loop %d/%d", i, len(srcs))
                   src = srcs[i]
                   if len(src) > 0 {
                      break
@@ -268,7 +274,7 @@ gzipcheck:
                }
             }
 
-            Goose.Serve.Logf(0,"panic (%s): calling %s -> %s with %s @ %s", panicerr, endpoint.Path, authparms, src)
+            Goose.Serve.Logf(1,"panic (%s): calling %s with %s @ %s", panicerr, endpoint.Path, authparms, src)
          }
       }()
 
@@ -423,10 +429,17 @@ gzipcheck:
                   }
                   op = opi.(*WSocketOperation)
 
+                  request, ok = request[2].([]interface{})
+
+                  if !ok {
+                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: 3rd parameter must be array", trackid)
+                     break
+                  }
+
                   if op.CallByRef {
-                     ins, err = pushParms(request[2:], obj, op.Method)
+                     ins, err = pushParms(request, obj, op.Method)
                   } else {
-                     ins, err = pushParms(request[2:], reflect.Indirect(obj), op.Method)
+                     ins, err = pushParms(request, reflect.Indirect(obj), op.Method)
                   }
 
                   if err != nil {
@@ -453,9 +466,15 @@ gzipcheck:
 
                   WSResponse = retData[0].Interface().(Response)
 
-                  // callID , status, response
-                  Goose.Serve.Logf(1,"[%d] Websocket send %#v", trackid, WSResponse.Body)
-                  codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+                  if WSResponse.Body == nil {
+                     // callID , status (no content)
+                     Goose.Serve.Logf(1,"[%d] Websocket send no content", trackid)
+                     codec.Send(ws, []interface{}{trackid, WSResponse.Status})
+                  } else {
+                     // callID , status, response
+                     Goose.Serve.Logf(1,"[%d] Websocket send %#v", trackid, WSResponse.Body)
+                     codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+                  }
                }
 
                Goose.Serve.Logf(1,"[%d] Websocket message sent", trackid)

@@ -17,6 +17,7 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    var v reflect.Value
    var parmtypes []reflect.Type
    var object struct{}
+   var evHandle *WSEventTrigger
 
    // De-reference the object, if needed
    v = reflect.ValueOf(obj)
@@ -29,7 +30,7 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    // Scans the websocket definer struct object for definitions of event triggers
 EventTriggerScan:
    for i=0; i<t.NumField(); i++ {
-      Goose.Serve.Logf(2,"Looking for event channel on field %s",t.Field(i).Name)
+      Goose.Serve.Logf(3,"Looking for event channel on field %s",t.Field(i).Name)
 
       // Rules to define an event trigger:
       // a) the field MUST be of type WSEventTrigger
@@ -42,7 +43,12 @@ EventTriggerScan:
          }
          Goose.Serve.Logf(2,"Event setup for %s",ev)
          // stores the event handler in a global mapping
-         evHandlers[ev] = v.Field(i).Interface().(*WSEventTrigger)
+         evHandle = v.Field(i).Interface().(*WSEventTrigger)
+         if evHandle == nil {
+            Goose.Serve.Logf(1,"Warning event %s is nil, ignoring it", ev)
+            continue
+         }
+         evHandlers[ev] = evHandle
 
          // Scans for the TYPES of the event trigger parameters.
          // Manual tag parsing (no reflect.StructTag facilities) because the tag names are not known.
@@ -69,6 +75,9 @@ EventTriggerScan:
                }
             }
          }
+
+         Goose.Serve.Logf(2,"Event %s handled by %#v", ev, evHandlers[ev])
+         Goose.Serve.Logf(2,"Event %s data %#v", ev, evHandlers[ev].EventData)
 
          // Waitgroup control needed to avoid closing the websocket before all data is sent to the client.
          wg.Add(1)
@@ -129,15 +138,16 @@ ExpectTrigger:
                // event name , event data
                err = codec.Send(ws, []interface{}{0, name, v.Interface()})
                if err != nil {
-                  c.Close()
-                  return
+                  Goose.Serve.Logf(4,"Event trigger channel was closed when sending output on event %s: %#v", name, v.Interface())
+//                  c.Close()
+//                  return
                }
             }
 
          }(reflect.ValueOf(evHandlers[ev].EventData), ev, parmtypes)
       }
    }
-   Goose.Serve.Logf(1,"Event channels for type %#v all configured",t.Name)
+   Goose.Serve.Logf(2,"Event channels for type %#v all configured",t.Name)
 }
 
 

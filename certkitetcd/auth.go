@@ -63,12 +63,13 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
    issuers = map[string]struct{}{}
    users   = map[string]*x509.Certificate{}
 
+   Goose.Auth.Logf(6,"Peer certificates: %#v",TLS.PeerCertificates)
    for _, cert = range TLS.PeerCertificates {
       if cert.IsCA {
          continue
       }
-      Goose.Auth.Logf(5,"Peer certificate: %#v",cert)
-      Goose.Auth.Logf(6,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      Goose.Auth.Logf(6,"Peer certificate: %#v",cert)
+      Goose.Auth.Logf(6,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       issuer = keyHash(cert.AuthorityKeyId)
       subj = keyHash(cert.SubjectKeyId)
 
@@ -83,9 +84,10 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
       }
    }
 
+   Goose.Auth.Logf(6,"Peer certificates: %#v",TLS.PeerCertificates)
    for _, cert = range users {
       Goose.Auth.Logf(6,"Peer certificate.1: %#v",cert)
-      Goose.Auth.Logf(5,"Peer certificate.1: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
+      Goose.Auth.Logf(6,"Peer certificate.1: #%s, ID: %s, Issuer: %s, Subject: %s",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       CertKey = certKey(cert)
       if CertKey == "" {
          continue
@@ -107,9 +109,13 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
       return http.StatusOK, cert, nil
    }
 
-   Goose.Auth.Logf(1,"Unauthorized access attempt from %s@%s to path %s", cert.Subject.CommonName, RemoteAddr, path)
    Goose.Auth.Logf(6,"Unauthorized access attempt, cert: %#v",cert)
-   Goose.Auth.Logf(4,"Sent access cert (needs authorization): %#v",cert.Subject)
+   if cert == nil {
+      Goose.Auth.Logf(1,"Unauthorized access attempt from nil@%s to path %s", RemoteAddr, path)
+   } else {
+      Goose.Auth.Logf(1,"Unauthorized access attempt from %s@%s to path %s", cert.Subject.CommonName, RemoteAddr, path)
+      Goose.Auth.Logf(4,"Sent access cert (needs authorization): %#v",cert.Subject)
+   }
 
    for commonName, _ = range ck.UserCerts {
       Goose.Auth.Logf(4,"access grantable to: %s",commonName)

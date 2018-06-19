@@ -41,6 +41,14 @@ type MultipartUnmarshaler struct {
    index     int
 }
 
+type Base64Unmarshaler struct {
+   r        io.Reader
+}
+
+type DummyUnmarshaler struct {
+   r        io.Reader
+}
+
 type Response struct {
    Status            int
    Header map[string]string
@@ -223,6 +231,7 @@ var WrongParameterType = errors.New("Wrong parameter type")
 var MapParameterEncodingError = errors.New("Map parameter encoding error")
 var ErrorInvalidType = errors.New("Invalid type")
 var ErrorConversionOverflow = errors.New("Conversion overflow")
+var ErrorDecodeError = errors.New("Decode error")
 var ErrorStopEventTriggering = errors.New("Stop event triggering")
 var ErrorEndEventTriggering = errors.New("End event triggering")
 var ErrorMissingWebsocketInTagSyntax = errors.New("Syntax error missing websocket 'in' tag")

@@ -30,9 +30,9 @@ func (svc *Service) FetchEndpointHandler(proto, method, path string) (*UrlNode, 
 
 //   for _, endpoint = range svc.Svc {
    for i=1; i<len(match); i++ {
-      Goose.Serve.Logf(5,"trying %s with endpoint:  %s",pathId,svc.Svc[svc.MatchedOps[i-1]].Path)
+      Goose.Serve.Logf(6,"trying %s with endpoint:  %s",pathId,svc.Svc[svc.MatchedOps[i-1]].Path)
       if len(match[i]) > 0 {
-         Goose.Serve.Logf(5,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,pathId)
+         Goose.Serve.Logf(4,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,pathId)
          endpoint = svc.Svc[svc.MatchedOps[i-1]]
          for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
             authparms[endpoint.ParmNames[j-i-1]] = match[j]

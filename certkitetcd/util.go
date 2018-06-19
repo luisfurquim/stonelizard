@@ -138,7 +138,6 @@ func (crtkit CertKit) ReadDecryptRsaPrivKeyFromReader(r io.Reader) (*rsa.Private
    }
 
    plainkey, err = x509.DecryptPEMBlock(block,[]byte{})
-   Goose.Loader.Logf(1,"DecryptPEMBlock: %s",plainkey)
    if err != nil {
       return nil, nil, err
    }

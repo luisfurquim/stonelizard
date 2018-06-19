@@ -287,7 +287,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
 //                     if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
                      if (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                        Goose.New.Logf(1,"%s: %s",tk[1:len(tk)-1])
+                        Goose.New.Logf(0,"%s on %s: %s",ErrorInvalidParameterType,methodName,tk[1:len(tk)-1])
                         return nil, ErrorInvalidParameterType
                      }
 

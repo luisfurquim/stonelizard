@@ -28,9 +28,11 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
 
    ins = []reflect.Value{obj}
 
+   Goose.OpHandle.Logf(5,"parsing params %#v",parms)
+
    for i, iface = range parms {
       parmType = met.Type.In(i+1)
-      Goose.OpHandle.Logf(0,"parsing parm %#v",iface)
+      Goose.OpHandle.Logf(6,"parsing parm %#v",iface)
 
       switch iface.(type) {
          case string:
@@ -78,11 +80,20 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
             }
             Goose.OpHandle.Logf(4,"parmcoding: %s",p)
             buf = []byte(p)
-         case bool, []interface{}, map[string]interface{}:
+         case []interface{}:
+            parmTypeName = "[]interface{}"
             buf, err = json.Marshal(iface)
             if err != nil {
-               Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
-               Goose.OpHandle.Logf(1,"Internal server error parsing %s: %s",buf,err)
+               Goose.OpHandle.Logf(1,"marshal error.1: %s",err)
+               Goose.OpHandle.Logf(1,"Internal server error parsing.1 %s: %s",buf,err)
+               return nil, err
+            }
+
+         case bool, map[string]interface{}:
+            buf, err = json.Marshal(iface)
+            if err != nil {
+               Goose.OpHandle.Logf(1,"marshal error.1: %s",err)
+               Goose.OpHandle.Logf(1,"Internal server error parsing.1 %s: %s",buf,err)
                return nil, err
             }
 
@@ -112,7 +123,7 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
       }
       Goose.OpHandle.Logf(5,"parmtype: %s",parmTypeName)
       parm = reflect.New(parmType)
-      Goose.OpHandle.Logf(1,"adding parm %s",buf)
+      Goose.OpHandle.Logf(3,"adding parm %s",buf)
       err = json.Unmarshal(buf,parm.Interface())
       if err != nil {
          Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
@@ -121,7 +132,7 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
          return nil, err
       }
 
-      Goose.OpHandle.Logf(1,"added parm %#v",reflect.Indirect(parm).Interface())
+      Goose.OpHandle.Logf(3,"added parm %#v",reflect.Indirect(parm).Interface())
 
       ins = append(ins,reflect.Indirect(parm))
       Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
