@@ -46,45 +46,47 @@ func GetWebSocketSpec(field reflect.StructField, WSMethodName string, WSMethod r
       Responses: responses, // callID , status, response
    }
 
-   // Scans for parameters defined in the "in" tag
-   for parmcount, parmName = range strings.Split(strings.Trim(inTag,""),",") {
-      if parmName=="" {
-         Goose.Swagger.Logf(1,"%s",ErrorParmListSyntax)
-         return nil, ErrorInvalidType
-      }
+   if inTag != "" {
+      // Scans for parameters defined in the "in" tag
+      for parmcount, parmName = range strings.Split(strings.Trim(inTag,""),",") {
+         if parmName=="" {
+            Goose.Swagger.Logf(1,"%s",ErrorParmListSyntax)
+            return nil, ErrorInvalidType
+         }
 
-      // Get the swagger definition for the 'parmcount'th parameter
-      SwaggerParameter, err = GetSwaggerType(WSMethod.Type.In(parmcount+1))
-      if err != nil {
-         return nil, err
-      }
+         // Get the swagger definition for the 'parmcount'th parameter
+         SwaggerParameter, err = GetSwaggerType(WSMethod.Type.In(parmcount+1))
+         if err != nil {
+            return nil, err
+         }
 
-      if SwaggerParameter == nil {
-         return nil, ErrorInvalidNilParam
-      }
+         if SwaggerParameter == nil {
+            return nil, ErrorInvalidNilParam
+         }
 
-      // Currently, we do not allow aggregated types
-//      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
-      if (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
-         Goose.New.Logf(1,"%s: %s -> sch_req:%#v %#v",ErrorInvalidParameterType,parmName,SwaggerParameter.Schema.Required,SwaggerParameter)
-         return nil, ErrorInvalidParameterType
-      }
+         // Currently, we do not allow aggregated types
+   //      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
+         if (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
+            Goose.New.Logf(1,"%s: %s -> sch_req:%#v %#v",ErrorInvalidParameterType,parmName,SwaggerParameter.Schema.Required,SwaggerParameter)
+            return nil, ErrorInvalidParameterType
+         }
 
-      xkeytype = ""
-      if SwaggerParameter.Schema != nil {
-         xkeytype = SwaggerParameter.Schema.XKeyType
-      }
+         xkeytype = ""
+         if SwaggerParameter.Schema != nil {
+            xkeytype = SwaggerParameter.Schema.XKeyType
+         }
 
-      operation.Parameters = append(
-         operation.Parameters,
-         SwaggerParameterT{
-            Name: parmName,
-            In: "body",
-            Required: true,
-            Type: SwaggerParameter.Schema.Type,
-            XKeyType: xkeytype,
-            Format: SwaggerParameter.Format,
-         })
+         operation.Parameters = append(
+            operation.Parameters,
+            SwaggerParameterT{
+               Name: parmName,
+               In: "body",
+               Required: true,
+               Type: SwaggerParameter.Schema.Type,
+               XKeyType: xkeytype,
+               Format: SwaggerParameter.Format,
+            })
+      }
    }
 
    return operation, nil

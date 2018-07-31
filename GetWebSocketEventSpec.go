@@ -87,7 +87,7 @@ func GetWebSocketEventSpec(field reflect.StructField, WSMethodName string, WSMet
                }
             }
          default:
-            Goose.Swagger.Logf(1,"Error %s @%d (%s)",WrongParameterType,parmcount,tags[2])
+            Goose.Swagger.Logf(1,"Error %s @%d (%s)",WrongParameterType,parmcount,tag[2])
             return nil, WrongParameterType
          }
       }
