@@ -337,6 +337,11 @@ gzipcheck:
                   if err = ws.Close(); err != nil {
                      Goose.Serve.Logf(1,"Error closing websocket connection: %s",err)
                   }
+
+                  met, ok = obj.Type().MethodByName("OnClose")
+                  if ok {
+                     met.Func.Call([]reflect.Value{obj})
+                  }
                   break
                }
 
@@ -468,16 +473,16 @@ gzipcheck:
 
                   if WSResponse.Body == nil {
                      // callID , status (no content)
-                     Goose.Serve.Logf(1,"[%d] Websocket send no content", trackid)
+                     Goose.Serve.Logf(4,"[%d] Websocket send no content", trackid)
                      codec.Send(ws, []interface{}{trackid, WSResponse.Status})
                   } else {
                      // callID , status, response
-                     Goose.Serve.Logf(1,"[%d] Websocket send %#v", trackid, WSResponse.Body)
+                     Goose.Serve.Logf(4,"[%d] Websocket send %#v", trackid, WSResponse.Body)
                      codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
                   }
                }
 
-               Goose.Serve.Logf(1,"[%d] Websocket message sent", trackid)
+               Goose.Serve.Logf(4,"[%d] Websocket message sent", trackid)
             }
 
             // stop all event triggers
