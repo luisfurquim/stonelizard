@@ -21,7 +21,6 @@ import (
 
 func certKey(cert *x509.Certificate) string {
    var k string
-   var hak, hsk hash.Hash
 
    if len(cert.EmailAddresses)>0 {
       k = cert.EmailAddresses[0]
@@ -29,19 +28,14 @@ func certKey(cert *x509.Certificate) string {
       k = cert.Subject.CommonName
    }
 
-   hak = sha1.New()
-	hak.Write(cert.AuthorityKeyId)
-   hsk = sha1.New()
-	hak.Write(cert.SubjectKeyId)
-
-   return fmt.Sprintf("%s_%2x_%2x", k, hak.Sum(nil), hsk.Sum(nil))
+   return fmt.Sprintf("%s_%2x_%2x", k, sha1.Sum(cert.AuthorityKeyId), sha1.Sum(cert.RawSubjectPublicKeyInfo))
 }
 
 func keyHash(issuer []byte) string {
    var h hash.Hash
 
    h = sha1.New()
-	h.Write(issuer)
+   h.Write(issuer)
 
    return string(h.Sum(nil))
 }
@@ -295,7 +289,7 @@ func (ck *CertKit) Trust(id string) error {
 
    _, err = etcd.NewKeysAPI(ck.Etcdcli).Set(context.Background(), tgtpath, "", &etcd.SetOptions{Dir:true})
    if err != nil {
-      Goose.Auth.Logf(1,"Error setting configuration, creating diretory (%s): %s",tgtpath,err)
+      Goose.Auth.Logf(1,"Error setting configuration, creating directory (%s): %s",tgtpath,err)
       return err
    }
 
