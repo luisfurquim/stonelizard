@@ -55,7 +55,6 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    hd.Add("Access-Control-Allow-Origin","*")
    hd.Add("Vary","Origin")
 
-
    for _hd, val := range r.Header {
       Goose.Serve.Logf(6,"Header %s:%#v",_hd, val)
    }
@@ -212,18 +211,24 @@ gzipcheck:
    }
 
 
+   Goose.Serve.Logf(1, "@")
+
    if endpoint.produces == "application/json" {
       mrsh = json.NewEncoder(outWriter)
       hd.Add("Content-Type","application/json")
    } else if endpoint.produces == "application/xml" {
       mrsh = xml.NewEncoder(outWriter)
       hd.Add("Content-Type","application/xml")
-   } else if (endpoint.produces == "application/javascript") || (endpoint.produces[:5] == "text/") {
+   } else if (endpoint.produces == "application/javascript") || (len(endpoint.produces)>=5 && endpoint.produces[:5] == "text/") {
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
    } else if endpoint.produces == "application/octet-stream" {
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type","application/octet-stream")
+   } else if endpoint.produces == "*" {
+      Goose.Serve.Logf(1, "A")
+      mrsh = NewStaticEncoder(outWriter)
+      Goose.Serve.Logf(1, "B")
    } else {
       errmsg := fmt.Sprintf("Internal server error determining response mimetype")
       Goose.Serve.Logf(1,errmsg)
