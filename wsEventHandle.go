@@ -8,7 +8,7 @@ import (
 )
 
 // Creates the handles for each websocket event
-func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, wg sync.WaitGroup, evHandlers map[string]*WSEventTrigger) {
+func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, wg *sync.WaitGroup, evHandlers map[string]*WSEventTrigger, startwg *sync.WaitGroup) {
    var i int
    var ev string
    var tag []string
@@ -26,6 +26,9 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    }
 
    t = v.Type()
+
+   startwg.Add(t.NumField())
+
    Goose.Serve.Logf(2,"Looking for event channel for type %#v",t)
    // Scans the websocket definer struct object for definitions of event triggers
 EventTriggerScan:
@@ -37,7 +40,7 @@ EventTriggerScan:
       // b) the field name MUST be exportable (UPPERCASE first letter)
       if t.Field(i).Type.AssignableTo(typeWSEventTrigger) {
          ev = t.Field(i).Name
-         if ev[0:1] == strings.ToLower(ev[0:1]) {
+         if ev[:1] == strings.ToLower(ev[:1]) {
             Goose.Serve.Logf(1,"Warning %s on %s, ignoring it",ErrorFieldIsOfWSEventTriggerTypeButUnexported, ev)
             continue
          }
@@ -98,6 +101,7 @@ ExpectTrigger:
                v, ok = c.Recv()
                Goose.Serve.Logf(4,"Event comm loop test %#v received %#v",ok, v.Interface())
                if !ok {
+                  Goose.Serve.Logf(1,"End event triggering: wsStopEvent has closed the channel")
                   // End event triggering if wsStopEvent has closed the channel
                   return
                }
@@ -146,7 +150,9 @@ ExpectTrigger:
 
          }(reflect.ValueOf(evHandlers[ev].EventData), ev, parmtypes)
       }
+      startwg.Done()
    }
+   startwg.Done()
    Goose.Serve.Logf(2,"Event channels for type %#v all configured",t.Name)
 }
 

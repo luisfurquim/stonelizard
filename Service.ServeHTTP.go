@@ -134,7 +134,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    Goose.Serve.Logf(6,"Parms with query: %#v",parms)
 
    for _, header = range endpoint.Headers {
-      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
+      if _, ok = r.Header[header]; !ok {
+//      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
          errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredHTTPHeader,header)
          Goose.Serve.Logf(1,errmsg)
          Goose.Serve.Logf(6,"HTTP Headers found: %#v",r.Header)
@@ -307,6 +308,7 @@ gzipcheck:
             var ins []reflect.Value
             var WSResponse Response
             var wg sync.WaitGroup
+            var startwg sync.WaitGroup
             var sessionId = rand.Intn(100000)
             var evHandlers map[string]*WSEventTrigger
             var name string
@@ -328,7 +330,9 @@ gzipcheck:
 
             evHandlers = map[string]*WSEventTrigger{}
 
-            wsEventHandle(ws, codec, resp.Body, wg, evHandlers)
+            startwg.Add(1)
+            wsEventHandle(ws, codec, resp.Body, &wg, evHandlers, &startwg)
+            startwg.Wait()
 
             wsMainLoop:
             for {
