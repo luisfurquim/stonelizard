@@ -237,3 +237,20 @@ func (ck *CertKit) Delete(tree, id string) error {
    return os.Remove(fmt.Sprintf("%s%c%s%c%s.crt", ck.Path, os.PathSeparator, tree, os.PathSeparator, id))
 }
 
+
+func (ck *CertKit) AddUserData(usrKey string, ClientCert *x509.Certificate) error {
+   var err error
+
+   if err == nil {
+      if ck.UserCerts == nil {
+         ck.UserCerts = map[string]*x509.Certificate{usrKey : ClientCert}
+      } else {
+         ck.UserCerts[usrKey] = ClientCert
+      }
+   } else {
+      Goose.Loader.Logf(1,"Error decoding certificate for %s: %s", usrKey, err)
+   }
+
+   return err
+}
+
