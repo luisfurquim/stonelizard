@@ -193,7 +193,16 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
          hostport := strings.Split(resp.Config.ListenAddress(),":")
          if hostport[0] == "" {
-            hostport[0] = resp.Authorizer.GetDNSNames()[0]
+            if resp.Authorizer == nil {
+               hostport[0] = "0.0.0.0"
+            } else {
+               authdns := resp.Authorizer.GetDNSNames()
+               if len(authdns) > 0 {
+                  hostport[0] = authdns[0]
+               } else {
+                  hostport[0] = "0.0.0.0"
+               }
+            }
          }
 
          resp.Swagger = &SwaggerT{

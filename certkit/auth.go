@@ -143,6 +143,9 @@ func (ck *CertKit) StartCRLServer(listenAddress string, listener *stonelizard.St
 }
 
 func (ck *CertKit) GetDNSNames() []string {
+   if ck==nil || ck.ServerCert == nil {
+      return []string{}
+   }
    return ck.ServerCert.DNSNames
 }
 

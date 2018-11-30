@@ -51,10 +51,15 @@ func GetWebSocketSpec(field reflect.StructField, WSMethodName string, WSMethod r
       for parmcount, parmName = range strings.Split(strings.Trim(inTag,""),",") {
          if parmName=="" {
             Goose.Swagger.Logf(1,"%s",ErrorParmListSyntax)
-            return nil, ErrorInvalidType
+            return nil, ErrorParmListSyntax
          }
 
          // Get the swagger definition for the 'parmcount'th parameter
+         if WSMethod.Type.NumIn() <= parmcount {
+            Goose.Swagger.Logf(1,"%s: parmcount mismatch",ErrorParmListSyntax)
+            return nil, ErrorParmListSyntax
+         }
+         Goose.Swagger.Logf(1,"Getting parm %d=%s, from %d", parmcount+1, parmName, WSMethod.Type.NumIn())
          SwaggerParameter, err = GetSwaggerType(WSMethod.Type.In(parmcount+1))
          if err != nil {
             return nil, err
@@ -64,12 +69,14 @@ func GetWebSocketSpec(field reflect.StructField, WSMethodName string, WSMethod r
             return nil, ErrorInvalidNilParam
          }
 
+/*
          // Currently, we do not allow aggregated types
    //      if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
          if (SwaggerParameter.CollectionFormat != "") || (SwaggerParameter.Schema.Required != nil && len(SwaggerParameter.Schema.Required)>0) {
             Goose.New.Logf(1,"%s: %s -> sch_req:%#v %#v",ErrorInvalidParameterType,parmName,SwaggerParameter.Schema.Required,SwaggerParameter)
             return nil, ErrorInvalidParameterType
          }
+*/
 
          xkeytype = ""
          if SwaggerParameter.Schema != nil {
