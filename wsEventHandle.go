@@ -97,7 +97,7 @@ EventTriggerScan:
 ExpectTrigger:
             for {
                // Wait for data sent by the websocket application layer (the event triggering)
-               Goose.Serve.Logf(3,"Event comm loop will wait on channel")
+               Goose.Serve.Logf(3,"Event comm loop will wait on channel for %s", name)
                v, ok = c.Recv()
                Goose.Serve.Logf(4,"Event comm loop test %#v received %#v",ok, v.Interface())
                if !ok {

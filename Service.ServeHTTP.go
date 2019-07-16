@@ -320,6 +320,8 @@ gzipcheck:
             var met reflect.Method
             var ok bool
 
+            Goose.OpHandle.Logf(2,"Websocket start") //5
+
             if endpoint.consumes == "application/json" {
                codec = websocket.JSON
 //            } else if endpoint.consumes == "application/xml" {
@@ -330,13 +332,17 @@ gzipcheck:
 
             evHandlers = map[string]*WSEventTrigger{}
 
+            Goose.OpHandle.Logf(2,"Websocket configuring events") //5
             startwg.Add(1)
             wsEventHandle(ws, codec, resp.Body, &wg, evHandlers, &startwg)
             startwg.Wait()
+            Goose.OpHandle.Logf(3,"Websocket events configured") //5
 
             wsMainLoop:
             for {
+               Goose.OpHandle.Logf(5,"Websocket loop start") //5
                err = codec.Receive(ws, &request)
+               Goose.OpHandle.Logf(6,"Websocket Received: %s",request) //5
                if err != nil {
                   if err == io.EOF {
                      Goose.Serve.Logf(1,"Ending websocket session %d for %s",sessionId, endpoint.Path)
@@ -379,6 +385,7 @@ gzipcheck:
 
                if opName == "bind" { // reserved word
                   parmOk := true
+                  Goose.Serve.Logf(6,"[%d] Websocket bind request %#v", trackid, request)//3
                   bindFor:
                   for i, evName = range request[2:] {
                      switch evName.(type) {
@@ -399,7 +406,7 @@ gzipcheck:
                      }
                   }
                   if parmOk {
-                     Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))
+                     Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))//3
                      codec.Send(ws, []interface{}{trackid, http.StatusOK})
                      met, ok = obj.Type().MethodByName("OnBind")
                      if ok {
@@ -467,7 +474,7 @@ gzipcheck:
                   if len(sIns) > 0 {
                      sIns = sIns[:len(sIns)-2]
                   }
-                  Goose.OpHandle.Logf(5,"Calling websocket operation with: %s",sIns)
+                  Goose.OpHandle.Logf(5,"Calling websocket operation with: %s",sIns) //5
                   retData := op.Method.Func.Call(ins)
                   sIns = ""
                   for _, rval = range retData {
@@ -476,7 +483,7 @@ gzipcheck:
                   if len(sIns) > 0 {
                      sIns = sIns[:len(sIns)-2]
                   }
-                  Goose.OpHandle.Logf(5,"Websocket operation retData: %s",retData)
+                  Goose.OpHandle.Logf(5,"Websocket operation retData: %s",retData) //5
 
                   WSResponse = retData[0].Interface().(Response)
 
