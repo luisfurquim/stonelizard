@@ -35,7 +35,7 @@ func (svc *Service) FetchEndpointHandler(proto, method, path string) (*UrlNode, 
          Goose.Serve.Logf(4,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,pathId)
          endpoint = svc.Svc[svc.MatchedOps[i-1]]
          for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
-            Goose.Serve.Logf(4,"j=%d, i=%d, endpoint.ParmNames: %#v, authparms: %#v",endpoint.ParmNames, authparms)
+            Goose.Serve.Logf(0,"j=%d, i=%d, endpoint.ParmNames: %#v, authparms: %#v",endpoint.ParmNames, authparms)
             authparms[endpoint.ParmNames[j-i-1]] = match[j]
          }
          for k := i+1; k<j; k++ { // parms = []interface{}(match[i+1:j])
