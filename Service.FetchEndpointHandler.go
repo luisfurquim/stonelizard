@@ -19,7 +19,7 @@ func (svc *Service) FetchEndpointHandler(proto, method, path string) (*UrlNode, 
    Goose.Serve.Logf(6,"Matcher will look on %#v", svc.Matcher)
    Goose.Serve.Logf(6,"Matcher will look for [%s]", pathId)
    match = svc.Matcher.FindStringSubmatch(pathId)
-   Goose.Serve.Logf(0,"Matcher found this %#v\n", match) //6
+   Goose.Serve.Logf(6,"Matcher found this %#v\n", match) //6
    if len(match) == 0 {
       Goose.Serve.Logf(1,"Invalid service handler : %s", pathId)
       return nil, nil, nil, http.StatusBadRequest
@@ -32,15 +32,15 @@ func (svc *Service) FetchEndpointHandler(proto, method, path string) (*UrlNode, 
    for i=1; i<len(match); i++ {
       Goose.Serve.Logf(6,"trying %s with endpoint:  %s",pathId,svc.Svc[svc.MatchedOps[i-1]].Path)
       if len(match[i]) > 0 {
-         Goose.Serve.Logf(0,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,pathId)//4
-         Goose.Serve.Logf(0,"Endpoint %#v",svc.Svc[svc.MatchedOps[i-1]])//7
-         Goose.Serve.Logf(0,"method: %s",method)
+         Goose.Serve.Logf(6,"Found endpoint %s for: %s",svc.Svc[svc.MatchedOps[i-1]].Path,pathId)//4
+         Goose.Serve.Logf(6,"Endpoint %#v",svc.Svc[svc.MatchedOps[i-1]])//7
+         Goose.Serve.Logf(5,"method: %s",method)
          endpoint = svc.Svc[svc.MatchedOps[i-1]]
          if method == "OPTIONS" {
             break
          }
          for j=i+1; (j<len(match)) && (len(match[j])>0); j++ {
-            Goose.Serve.Logf(0,"j=%d, i=%d, endpoint.ParmNames: %#v, authparms: %#v", j, i, endpoint.ParmNames, authparms)
+            Goose.Serve.Logf(7,"j=%d, i=%d, endpoint.ParmNames: %#v, authparms: %#v", j, i, endpoint.ParmNames, authparms)
             authparms[endpoint.ParmNames[j-i-1]] = match[j]
          }
          for k := i+1; k<j; k++ { // parms = []interface{}(match[i+1:j])
