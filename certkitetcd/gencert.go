@@ -22,7 +22,11 @@ func New(srvsubject, casubject pkix.Name, host, email string) (*CertKit, error) 
    var e      error
 
    crtkit = CertKit{}
-
+	
+	crtkit.notAfterCA = time.Now().Add(caTime)
+	crtkit.notAfterClient	= time.Now().Add(clientTime)
+	crtkit.notAfterServer	= time.Now().Add(serverTime)
+   
    e = crtkit.GenerateCA(casubject, host, email)
    if  e != nil {
       return nil, e
@@ -68,7 +72,8 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
       Subject:               subject,
       IsCA:                  false,
       NotBefore:             notBefore,
-      NotAfter:              notBefore.Add(365*24*time.Hour),
+      //NotAfter:              notBefore.Add(365*24*time.Hour),
+      NotAfter:					crtkit.notAfterServer,
       DNSNames:              []string{host, strings.Split(host,".")[0]},
       AuthorityKeyId:        crtkit.CACert.SubjectKeyId,
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
@@ -134,7 +139,8 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenp
       AuthorityKeyId:        []byte(fmt.Sprintf("%s",priv.PublicKey.N)),
 
       NotBefore:             notBefore,
-      NotAfter:              notBefore.Add(365*20*24*time.Hour),
+      //NotAfter:              notBefore.Add(365*20*24*time.Hour),
+      NotAfter:				  crtkit.notAfterCA,
       DNSNames:              []string{host, strings.Split(host,".")[0]},
       PolicyIdentifiers:     []asn1.ObjectIdentifier{[]int{2, 16, 76, 1, 1, 0}}, // Policy: 2.16.76.1.1.0 CPS: http://acraiz.icpbrasil.gov.br/DPCacraiz.pdf
       CRLDistributionPoints: []string{crlurl},
@@ -176,6 +182,7 @@ func (crtkit *CertKit) GenerateClient(subject pkix.Name, email, password string)
    }
 
    notBefore         := time.Now()
+   
    serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
    if err != nil {
       return nil, nil, errors.New(fmt.Sprintf("failed to generate serial number: %s", err))
@@ -185,7 +192,8 @@ func (crtkit *CertKit) GenerateClient(subject pkix.Name, email, password string)
       SerialNumber:          serialNumber,
       Subject:               subject,
       NotBefore:             notBefore,
-      NotAfter:              notBefore.Add(3650*24*time.Hour),
+      //NotAfter:             notBefore.Add(3650*24*time.Hour),
+      NotAfter:				  crtkit.notAfterClient,
       EmailAddresses:        []string{email},
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},

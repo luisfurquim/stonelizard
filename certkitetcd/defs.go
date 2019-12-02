@@ -1,6 +1,7 @@
 package certkitetcd
 
 import (
+	"time"
    "errors"
    "regexp"
    "crypto/tls"
@@ -29,6 +30,9 @@ type CertKit struct {
    ServerX509KeyPair          tls.Certificate
    etcdCertKeyRE             *regexp.Regexp
    etcdDeleteKeyRE           *regexp.Regexp
+   notAfterCA						time.Time
+	notAfterClient					time.Time
+	notAfterServer					time.Time
 }
 
 
@@ -49,3 +53,11 @@ var ErrorBadEtcdHandler    = errors.New("Bad etcd handler provided")
 var ErrorBadEtcdKey        = errors.New("Bad etcd key provided")
 var ErrorBadPEMBlock       = errors.New("Bad PEM block")
 var ErrorValidDate         = errors.New("Failed certificate has expired or not yet valid date")
+
+
+
+const serverTime = 365*24*time.Hour
+const clientTime = 3650*24*time.Hour
+const caTime = 365*24*20*time.Hour
+
+
