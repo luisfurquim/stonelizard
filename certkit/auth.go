@@ -4,30 +4,33 @@ import (
    "os"
    "fmt"
    "bytes"
+   "strings"
    "net/http"
    "io/ioutil"
    "crypto/rsa"
    "crypto/tls"
    "crypto/x509"
+   "encoding/pem"
    "github.com/luisfurquim/stonelizard"
 )
 
 func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {
    var cert       *x509.Certificate
    var UserCert   *x509.Certificate
-   var found       bool
    var ok          bool
    var commonName  string
 
-   Goose.Auth.Logf(5,"Peer certificates")
-   found = false
+   Goose.Auth.Logf(0,"Peer certificates: %#v", Goose)
    for _, cert = range TLS.PeerCertificates {
+      Goose.Auth.Logf(5,"ck.UserCerts: %#v",ck.UserCerts)
       Goose.Auth.Logf(6,"Peer certificate: %#v",cert)
       Goose.Auth.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       if UserCert, ok = ck.UserCerts[cert.Subject.CommonName]; ok {
+         Goose.Auth.Logf(5,"1")
          if bytes.Equal(UserCert.Raw,cert.Raw) {
-            found = true
-            break
+            Goose.Auth.Logf(5,"found")
+            Goose.Auth.Logf(7,"TLS:%#v",TLS)
+            return http.StatusOK, cert, nil
          } else {
             Goose.Auth.Logf(4,"certs diff: %s",cert.Subject.CommonName)
          }
@@ -35,11 +38,6 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
    }
 
    Goose.Auth.Logf(5,"Ending peer certificate scan")
-
-   if found {
-      Goose.Auth.Logf(7,"TLS:%#v",TLS)
-      return http.StatusOK, cert, nil
-   }
 
    Goose.Auth.Logf(1,"Unauthorized access attempt from %s to path %s", RemoteAddr, path)
    Goose.Auth.Logf(6,"Unauthorized access attempt, certs: %#v",TLS.PeerCertificates)
@@ -213,6 +211,27 @@ func (ck *CertKit) GetPending() (map[string]interface{}, error) {
    }
 
    return resp, nil
+}
+
+func (ck *CertKit) SavePending(cert *x509.Certificate) error {
+   var err error
+   var fname string
+
+   fname = fmt.Sprintf("%s%cpending%c%s.crt", ck.Path, os.PathSeparator, os.PathSeparator, strings.Replace(cert.Subject.CommonName," ","_",-1))
+
+   _, err = os.Stat(fname)
+   if !os.IsNotExist(err) {
+      Goose.Auth.Logf(1,"Can't write file %s: %s", fname, err)
+      return ErrorDuplicateFile
+   }
+
+   err = ioutil.WriteFile(fname, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}), 0600)
+   if err != nil {
+      Goose.Auth.Logf(1,"Error writing file %s: %s", fname, err)
+      return err
+   }
+
+   return nil
 }
 
 func (ck *CertKit) GetTrusted() (map[string]interface{}, error) {

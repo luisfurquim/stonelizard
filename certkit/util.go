@@ -230,8 +230,12 @@ func (ck *CertKit) Setup(udata map[string]interface{}) error {
 
 func (ck *CertKit) LoadUserData() error {
    var err error
-   err = filepath.Walk(fmt.Sprintf("%s%c%s",ck.Path, os.PathSeparator,"client"), func (path string, f os.FileInfo, err error) error {
+
+
+   err = filepath.Walk(fmt.Sprintf("%s%cclient",ck.Path, os.PathSeparator), func (path string, f os.FileInfo, err error) error {
       var ClientCert *x509.Certificate
+
+//      Goose.Loader.Logf(0,"read path: %s", path)
 
       if (len(path)<4) || (path[len(path)-4:]!=".crt") {
          return nil

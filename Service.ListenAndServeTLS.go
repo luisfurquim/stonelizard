@@ -6,6 +6,7 @@ import (
    "sync"
    "net/http"
    "crypto/tls"
+//   "github.com/kr/pretty"
 )
 
 //Init a webserver and wait for http requests.
@@ -117,6 +118,7 @@ FindEncLoop:
          }
 
          // Configure the listener
+//         Goose.InitServe.Fatalf(2,"svc %# v: \n\n\n %# v", pretty.Formatter(svc), pretty.Formatter(svc.Listener))
          crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
 
          // Start the server

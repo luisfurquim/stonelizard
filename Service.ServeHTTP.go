@@ -211,9 +211,6 @@ gzipcheck:
       }
    }
 
-
-   Goose.Serve.Logf(1, "@")
-
    if endpoint.produces == "application/json" {
       mrsh = json.NewEncoder(outWriter)
       hd.Add("Content-Type","application/json")
@@ -227,9 +224,7 @@ gzipcheck:
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type","application/octet-stream")
    } else if endpoint.produces == "*" {
-      Goose.Serve.Logf(1, "A")
       mrsh = NewStaticEncoder(outWriter)
-      Goose.Serve.Logf(1, "B")
    } else {
       errmsg := fmt.Sprintf("Internal server error determining response mimetype")
       Goose.Serve.Logf(1,errmsg)

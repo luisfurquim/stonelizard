@@ -47,6 +47,7 @@ var Goose  CertkitG
 
 var ErrorCertsMustHaveKeys = errors.New("Either provide both certificate and key or none of them")
 var ErrorUnauthorized      = errors.New("Unauthorized access attempt")
+var ErrorDuplicateFile      = errors.New("Error duplicate file")
 
 var CertDirectories = []string{
    "/etc/ssl/certs",
