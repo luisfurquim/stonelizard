@@ -227,6 +227,24 @@ type SwaggerOperationT struct {
    // Custom stonelizard extension. A list of websocket subprotocols the operation can consume.
    // At this moment, it only accepts the stonelizard's non-standard 'sam+json', which stands for 'JSON encoded simple array messaging'.
    XWSConsumes []string `json:"x-websocketconsumes,omitempty"`
+
+   // Custom stonelizard extension. It doesn't affect the web service operation.
+   // It is intended to provide developers a way to organize their web service client code.
+   // Our suggestion is that operations belonging to the same module be accesssed using
+   // the same class. But it is not mandatory.
+   XModule string `json:"x-module,omitempty"`
+
+   // Custom stonelizard extension. It doesn't affect the web service operation.
+   // It is intended to provide developers a way to handle the returned data.
+   // Our suggestion is to use this info to give clients a hint on WHERE to store
+   // the return data
+   XOutputVar string `json:"x-outputvar,omitempty"`
+
+   // Custom stonelizard extension. It doesn't affect the web service operation.
+   // It is intended to provide developers a way to handle the returned data.
+   // Our suggestion is to use this info to give clients a hint on HOW to store
+   // the return data
+   XOutput string `json:"x-output,omitempty"`
 }
 
 type SwaggerPathT map[string]*SwaggerOperationT

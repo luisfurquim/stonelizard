@@ -81,6 +81,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       Goose.Serve.Logf(6,"Received request of swagger.json: %#v",svc.Swagger)
 //      mrsh = json.NewEncoder(w)
 //      err = mrsh.Encode(svc.Swagger)
+      Goose.Serve.Logf(0,"Received request of swagger.json: %#v",svc.Swagger.Paths["/pleito"]["get"].Responses["200"].Schema.Items)
       buf, err = json.Marshal(svc.Swagger)
       if err!=nil {
          Goose.Serve.Logf(1,"Internal server error marshaling swagger.json: %s",err)

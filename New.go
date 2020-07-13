@@ -72,6 +72,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var exportedValue          []reflect.Value
    var this                     reflect.Value
    var num                      int
+   var mod, out, outvar         string
 
    for _, svc = range svcs {
 
@@ -461,6 +462,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                return nil, err
             }
 
+            mod = fld.Tag.Get("mod")
+            out = fld.Tag.Get("out")
+            outvar = fld.Tag.Get("outvar")
+
             resp.Swagger.Paths[path][strings.ToLower(httpmethod)] = &SwaggerOperationT{
                Schemes:     proto,
                OperationId: methodName,
@@ -468,6 +473,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Responses:   responses,
                Consumes:  []string{consumes},
                Produces:  []string{produces},
+               XModule:     mod,
+               XOutput:     out,
+               XOutputVar:  outvar,
             }
 
 
@@ -572,6 +580,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                }
                Goose.New.Logf(6,"Partial Matcher with options for %s is %s",path,reAllOps)
             }
+
          } else {
             Goose.New.Logf(2,"Checking %s for static handlers",fld.Name)
             static = fld.Tag.Get("path")

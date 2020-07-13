@@ -20,6 +20,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var subItem   *SwaggerParameterT
    var fldName    string
    var prm       *SwaggerParameterT
+   var title      string
 
    Goose.Swagger.Logf(6,"Parameter type : %d: %s",parm.Kind(),parm)
 
@@ -41,12 +42,13 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
       return GetSwaggerType(parm.Elem())
    }
 
-   if parm.Kind() == reflect.String || (parm.Kind() >= reflect.Bool && parm.Kind() <= reflect.Float64) {
-      if parm.Kind()==reflect.String {
-         prm.Schema.Type   = "string"
-         return prm, nil
-      }
+   if parm.Kind()==reflect.String {
+      prm.Schema.Type   = "string"
+      prm.Schema.Title  = "string"
+      return prm, nil
+   }
 
+   if (parm.Kind() >= reflect.Bool && parm.Kind() <= reflect.Float64) {
       if parm.Kind() == reflect.Bool {
          prm.Schema.Type = "boolean"
       }
@@ -75,6 +77,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          prm.Schema.Format = "double"
       }
 
+      prm.Schema.Title  = prm.Schema.Format
       return prm, nil
    }
 
@@ -92,8 +95,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
 
       prm.Type          = "array"
+      prm.Schema.Title  = arrayName(parm)
       prm.Schema.Type   = "array"
       prm.Schema.Items  = &SwaggerSchemaT{
+         Title:            item.Schema.Title,
          Type:             item.Schema.Type,
          Format:           item.Schema.Format,
          Items:            item.Schema.Items,
@@ -134,9 +139,14 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          }
       }
 
-      prm.Type          = "array"
-      prm.Schema.Type   = "array"
+      prm.Type                     = "array"
+      prm.Schema.Title             = mapName(parm)
+      prm.Schema.Type              = "array"
+      prm.Schema.XKeyType          = ktype
+      prm.Schema.XKeyFormat        = kformat
+      prm.Schema.XCollectionFormat = "cskv"
       prm.Schema.Items  = &SwaggerSchemaT{
+         Title:            item.Schema.Title,
          Type:             item.Schema.Type,
          Format:           item.Schema.Format,
          Items:            item.Schema.Items,
@@ -158,6 +168,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          Name: parm.Name(),
          Type:"object",
          Schema: &SwaggerSchemaT{
+            Title: parm.Name(),
             Type:"object",
             Required: []string{},
             Properties: map[string]SwaggerSchemaT{},
@@ -170,6 +181,14 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
          if field.Name[:1] == strings.ToLower(field.Name[:1]) {
             continue // Unexported field
+         }
+
+         title = field.Tag.Get("title")
+         Goose.New.Logf(2,"Title: [%s=%s]", field.Name, title)
+         if title != "" {
+            item.Schema.Title = title
+            Goose.New.Logf(2,"Title found: [%s=%#v]", field.Name, item.Schema)
+            continue
          }
 
          if field.Anonymous {
@@ -229,7 +248,8 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
       }
 
-      Goose.Swagger.Logf(6,"Got final struct: %#v",item)
+      Goose.Swagger.Logf(0,"Got final struct: %#v",item)//6
+      Goose.Swagger.Logf(0,"Got final struct: %#v",item.Schema)//6
       return item, nil
    }
 
@@ -274,6 +294,7 @@ func fieldHandle(fldName string, field reflect.StructField) (*SwaggerSchemaT, []
    }
 
    return &SwaggerSchemaT{
+      Title:            subItem.Schema.Title,
       Type:             fieldType,
       Format:           subItem.Schema.Format,
       Items:            subItem.Schema.Items,
@@ -282,4 +303,43 @@ func fieldHandle(fldName string, field reflect.StructField) (*SwaggerSchemaT, []
       Properties:       subItem.Schema.Properties,
    }, required, nil
 
+}
+
+
+func mapName(p reflect.Type) string {
+   var n string
+
+   n = p.Elem().Name()
+   if n != "" {
+      return n + "{}"
+   }
+
+   if p.Kind() == reflect.Map {
+      return mapName(p.Elem()) + "{}"
+   }
+
+   if p.Kind() == reflect.Array {
+      return arrayName(p.Elem()) + "{}"
+   }
+
+   return p.Name() + "{}"
+}
+
+func arrayName(p reflect.Type) string {
+   var n string
+
+   n = p.Elem().Name()
+   if n != "" {
+      return n + "[]"
+   }
+
+   if p.Kind() == reflect.Map {
+      return mapName(p.Elem()) + "[]"
+   }
+
+   if p.Kind() == reflect.Array {
+      return arrayName(p.Elem()) + "[]"
+   }
+
+   return p.Name() + "[]"
 }
