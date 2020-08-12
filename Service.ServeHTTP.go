@@ -38,6 +38,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var cryp                   string
    var httpStatus             int
    var proto                  string
+   var extAuth                ExtAuthT
 
    Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
 
@@ -116,23 +117,25 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       return
    }
 
-   if len(endpoint.Query) > 0 {
-      r.ParseForm()
-      for _, qry = range endpoint.Query {
-         if _, ok := r.Form[qry]; !ok {
-            errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredQueryField,qry)
-            Goose.Serve.Logf(1,errmsg)
-            w.WriteHeader(http.StatusBadRequest)
-            w.Write([]byte(errmsg))
-            return
-         }
-         parms = append(parms,r.Form[qry][0]) // TODO array support
-         authparms[endpoint.ParmNames[j]] = r.Form[qry][0]
-         j++
+   r.ParseForm()
+   for _, qry = range endpoint.Query {
+      if _, ok := r.Form[qry]; !ok {
+         errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredQueryField,qry)
+         Goose.Serve.Logf(1,errmsg)
+         w.WriteHeader(http.StatusBadRequest)
+         w.Write([]byte(errmsg))
+         return
       }
+      parms = append(parms,r.Form[qry][0]) // TODO array support
+      j++
+   }
+   for qry, _ = range r.Form {
+      authparms[qry] = r.Form[qry][0]
    }
 
    Goose.Serve.Logf(6,"Parms with query: %#v",parms)
+   Goose.Serve.Logf(6,"authparms with query: %#v",authparms)
+   Goose.Serve.Logf(6,"r.Form with query: %#v",r.Form)
 
    for _, header = range endpoint.Headers {
       if _, ok = r.Header[header]; !ok {
@@ -145,11 +148,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          return
       }
       parms = append(parms,r.Header[header][0]) // TODO array support
-      authparms[endpoint.ParmNames[j]] = r.Header[header][0]
       j++
+   }
+   for header, _ = range r.Header {
+      authparms[header] = r.Header[header][0]
    }
 
    Goose.Serve.Logf(6,"Parms with headers: %#v",parms)
+   Goose.Serve.Logf(6,"authparms with headers: %#v",authparms)
 
    Goose.Serve.Logf(5,"checking marshalers: cons:%s, prod:%s",endpoint.consumes,endpoint.produces)
 
@@ -280,7 +286,12 @@ gzipcheck:
          }
       }()
 
-      httpstat, authinfo, err = svc.Authorizer.Authorize(endpoint.Path, authparms, r.RemoteAddr, r.TLS, svc.SavePending)
+      if extAuth, ok = svc.Authorizer.(ExtAuthT); ok {
+         httpstat, authinfo, err = extAuth.ExtAuthorize(endpoint.Path, authparms, w, r, svc.SavePending)
+      } else {
+         httpstat, authinfo, err = svc.Authorizer.Authorize(endpoint.Path, authparms, r.RemoteAddr, r.TLS, svc.SavePending)
+      }
+      //Goose.Serve.Fatalf(0,"%d %#v %s", httpstat, authinfo, err)
    }
 
    if err == nil {

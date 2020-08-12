@@ -25,11 +25,14 @@ func initSvc(svcElem EndPointHandler) (*Service, error) {
       MatchedOps: map[int]int{},
    }
 
+//   Goose.Initialize.Fatalf(0,"svcElem: %#v",svcElem)
    cfg, err = svcElem.GetConfig()
    if err != nil {
       Goose.Initialize.Logf(1,"Failed opening config: %s", err)
       return nil, err
    }
+
+//   Goose.Initialize.Fatalf(0,"cfg: %#v",cfg)
 
    if cfg == nil {
       return nil, nil

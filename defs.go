@@ -149,6 +149,28 @@ type AuthT interface {
    GetTrusted() (map[string]interface{}, error)
 }
 
+// ExtAuthT interface defines an extended authorizer function.
+// If stonelizard detects that your authorizer also satisfies this interface, then
+// ExtAuthorize will be used INSTEAD of Authorize.
+// Input (
+//    @method: HTTP method
+//    @path: the path part of the URL of the operation as it appears in your EndPointHandler definition
+//    @parms: the key is the parameter name as defined in your EndPointHandler definition, the value is the one sent by the requesting client
+//    @request: the entire http request object
+//    @SavePending: function to save pending authorization information. It receives one interface{} argument with the info to be saved for later 3rd party analysis.
+//                  It may be just NOOP function, Authorize implementations SHOULD NOT trust that the info is really being saved.
+// )
+// Output (
+//    @httpstat: HTTP status code (used only if error is not nil)
+//    @data: if the operation has a tag 'access' with value 'authinfo', this data is passed to the operation
+//           method as the last parameter (remember to declare it as interface{}). This setting is not
+//           added to the swagger.json generated or any other generated service description.
+//    @err: error status (if it is not nil, the operation method is not called and the error message is sent to the client, along with the http status code)
+// )
+type ExtAuthT interface {
+   ExtAuthorize(path string, parms map[string]interface{}, resp http.ResponseWriter, req *http.Request, SavePending func(interface{}) error) (httpstat int, data interface{}, err error)
+}
+
 type EndPointHandler interface {
    GetConfig() (Shaper, error)
 }

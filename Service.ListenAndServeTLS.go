@@ -118,7 +118,8 @@ FindEncLoop:
          }
 
          // Configure the listener
-//         Goose.InitServe.Fatalf(2,"svc %# v: \n\n\n %# v", pretty.Formatter(svc), pretty.Formatter(svc.Listener))
+//         Goose.InitServe.Fatalf(0,"svc %# v: \n\n\n %# v", pretty.Formatter(svc), pretty.Formatter(svc.Listener))
+//         Goose.InitServe.Fatalf(0,"svc.Listener %# v: \n\n\n srv.TLSConfig: %# v", pretty.Formatter(svc.Listener), pretty.Formatter(srv.TLSConfig))
          crypls = tls.NewListener(svc.Listener,srv.TLSConfig)
 
          // Start the server
