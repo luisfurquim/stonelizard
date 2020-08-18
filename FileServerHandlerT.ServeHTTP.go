@@ -10,6 +10,10 @@ import (
 func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var err error
    var httpstat int
+   var extAuth ExtAuthT
+   var authparms map[string]interface{}
+   var qry, header string
+   var ok bool
 
    defer func() {
       // Tries to survive to any panic from the application.
@@ -55,7 +59,25 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    Goose.Serve.Logf(2,"svc.Access: %s from %s with level %d", r.RequestURI,  r.RemoteAddr, fs.svc.Access)
    if fs.svc.Access != AccessNone {
-      httpstat, _, err = fs.svc.Authorizer.Authorize(fs.path, nil, r.RemoteAddr, r.TLS, fs.svc.SavePending)
+
+      r.ParseForm()
+      authparms =  map[string]interface{}{}
+      for qry, _ = range r.Form {
+         authparms[qry] = r.Form[qry][0]
+      }
+
+      for header, _ = range r.Header {
+         authparms[header] = r.Header[header][0]
+      }
+
+//      Goose.Serve.Fatalf(0,"authparms: %#v", authparms)
+
+      if extAuth, ok = fs.svc.Authorizer.(ExtAuthT); ok {
+         httpstat, _, err = extAuth.ExtAuthorize(fs.svc.ch, fs.path, authparms, w, r, fs.svc.SavePending)
+      } else {
+         httpstat, _, err = fs.svc.Authorizer.Authorize(fs.path, nil, r.RemoteAddr, r.TLS, fs.svc.SavePending)
+      }
+
       if err != nil {
          Goose.Serve.Logf(1,"svc.Access: %s from %s with level %d error: %s", r.RequestURI,  r.RemoteAddr, fs.svc.Access, err)
          w.WriteHeader(httpstat)

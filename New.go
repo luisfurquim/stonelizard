@@ -73,6 +73,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var this                     reflect.Value
    var num                      int
    var mod, out, outvar         string
+   var extAuth                  ExtAuthT
 
    for _, svc = range svcs {
 
@@ -640,5 +641,12 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    Goose.New.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
    Goose.New.Logf(6,"Operations %#v\n",resp.Svc)
    resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
+
+   if extAuth, ok = resp.Authorizer.(ExtAuthT); ok {
+      resp.ch = make(chan ExtAuthorizeIn)
+      go extAuth.StartExtAuthorizer(resp.ch)
+   }
+
+
    return resp, nil
 }

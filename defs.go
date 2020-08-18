@@ -18,6 +18,22 @@ import (
 
 type Void struct{}
 
+type ExtAuthorizeIn struct {
+   Path string
+   Parms map[string]interface{}
+   Resp http.ResponseWriter
+   Req *http.Request
+   SavePending func(interface{}) error
+   Out chan ExtAuthorizeOut
+}
+
+type ExtAuthorizeOut struct {
+   Stat int
+   Data interface{}
+   Err error
+}
+
+
 type Static struct {
    w io.Writer
 }
@@ -153,7 +169,7 @@ type AuthT interface {
 // If stonelizard detects that your authorizer also satisfies this interface, then
 // ExtAuthorize will be used INSTEAD of Authorize.
 // Input (
-//    @method: HTTP method
+//    @ch: channel to send authorizer request data
 //    @path: the path part of the URL of the operation as it appears in your EndPointHandler definition
 //    @parms: the key is the parameter name as defined in your EndPointHandler definition, the value is the one sent by the requesting client
 //    @request: the entire http request object
@@ -168,7 +184,8 @@ type AuthT interface {
 //    @err: error status (if it is not nil, the operation method is not called and the error message is sent to the client, along with the http status code)
 // )
 type ExtAuthT interface {
-   ExtAuthorize(path string, parms map[string]interface{}, resp http.ResponseWriter, req *http.Request, SavePending func(interface{}) error) (httpstat int, data interface{}, err error)
+   ExtAuthorize(ch chan ExtAuthorizeIn, path string, parms map[string]interface{}, resp http.ResponseWriter, req *http.Request, SavePending func(interface{}) error) (httpstat int, data interface{}, err error)
+   StartExtAuthorizer(authReq chan ExtAuthorizeIn)
 }
 
 type EndPointHandler interface {
@@ -198,8 +215,9 @@ type Service struct {
    Access             uint8
    Authorizer         AuthT
    SavePending        func(interface{}) error
-   PlainStatic      map[string]string
-   SecureStatic     map[string]string
+   PlainStatic     map[string]string
+   SecureStatic    map[string]string
+   ch            chan ExtAuthorizeIn
 }
 
 
