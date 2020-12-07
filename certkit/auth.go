@@ -117,7 +117,7 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
 */
 
    tlsConfig.Certificates[0] = ck.ServerX509KeyPair
-   Goose.Auth.Logf(5,"X509KeyPair used: %#v",tlsConfig.Certificates[0])
+   Goose.Auth.Logf(0,"X509KeyPair used: %#v",tlsConfig.Certificates[0])//5
    tlsConfig.BuildNameToCertificate()
 
    return tlsConfig, nil

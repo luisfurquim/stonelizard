@@ -39,6 +39,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var httpStatus             int
    var proto                  string
    var extAuth                ExtAuthT
+   var origHost               string
 
    Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
 
@@ -71,7 +72,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    }
 
    Goose.Serve.Logf(7,"Will check if swagger.json is requested: %#v",svc.Swagger)
-   if r.URL.Path=="/swagger.json" {
+   if r.URL.Path==(svc.SwaggerPath+"/swagger.json") {
       defer func() {
          if r := recover(); r != nil {
             Goose.Serve.Logf(1,"Internal server error writing response body for swagger.json: %#v",r)
@@ -83,7 +84,18 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //      mrsh = json.NewEncoder(w)
 //      err = mrsh.Encode(svc.Swagger)
 //      Goose.Serve.Logf(0,"Received request of swagger.json: %#v",svc.Swagger.Paths["/pleito"]["get"].Responses["200"].Schema.Items)
+
+      if r.Header.Get("X-Forwarded-Host") != "" {
+         origHost = svc.Swagger.Host
+         svc.Swagger.Host = r.Header.Get("X-Forwarded-Host")
+      }
+
       buf, err = json.Marshal(svc.Swagger)
+
+      if origHost != "" {
+         svc.Swagger.Host = origHost
+      }
+
       if err!=nil {
          Goose.Serve.Logf(1,"Internal server error marshaling swagger.json: %s",err)
       }

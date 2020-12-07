@@ -17,6 +17,7 @@ import (
 )
 
 type Void struct{}
+type Mod struct{}
 
 type ExtAuthorizeIn struct {
    Path string
@@ -218,6 +219,7 @@ type Service struct {
    PlainStatic     map[string]string
    SecureStatic    map[string]string
    ch            chan ExtAuthorizeIn
+   SwaggerPath        string
 }
 
 
@@ -246,12 +248,14 @@ const StatusTrigEvent = 275
 const StatusTrigEventDescription = "Trig Event"
 
 var voidType = reflect.TypeOf(Void{})
+var ModType = reflect.TypeOf(Mod{})
 var float64Type = reflect.TypeOf(float64(0))
 var MaxUploadMemory int64 = 16 * 1024 * 1024
 var gorootRE *regexp.Regexp
 var gosrcRE *regexp.Regexp
 var gosrcFNameRE *regexp.Regexp
 var tagRE *regexp.Regexp
+var aggrIndentifierRE *regexp.Regexp = regexp.MustCompile(`[^\[\]\{\}]+([\[\]\{\}]+)`)
 
 var ErrorStopped = errors.New("Stop signal received")
 var ErrorParmListSyntax = errors.New("Syntax error on parameter list")
@@ -279,6 +283,9 @@ var ErrorNoRoot = errors.New("No service root specified")
 var ErrorServiceSyntax = errors.New("Syntax error on service definition")
 var ErrorCannotWrapListener = errors.New("Cannot wrap listener")
 var ErrorFieldIsOfWSEventTriggerTypeButUnexported = errors.New("Field is of Event Trigger type, but it is not exported")
+var ErrorUndefMod = errors.New("Undefined module")
+var ErrorUndefPropType = errors.New("Undefined property type")
+
 type StonelizardG struct {
    Listener     goose.Alert
    Swagger      goose.Alert

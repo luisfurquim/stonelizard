@@ -38,6 +38,11 @@ type SwaggerInfoT struct {
 
    // Provides the version of the application API (not to be confused with the specification version).
    Version        string             `json:"version"`
+
+   // Custom stonelizard field used to tell clients how to group client variables
+   // Used to automatically generate client code
+   // The first index is the module name, the second index is the property name
+   XModules       map[string]map[string]*SwaggerSchemaT `json:"x-modules,omitempty"`
 }
 
 type SwaggerWSOperationT struct {

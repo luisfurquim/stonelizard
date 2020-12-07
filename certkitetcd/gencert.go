@@ -24,9 +24,9 @@ func New(srvsubject, casubject pkix.Name, host, email string) (*CertKit, error) 
 
    crtkit = CertKit{}
 
-   crtkit.notAfterCA = time.Now().Add(caTime)
-   crtkit.notAfterClient   = time.Now().Add(clientTime)
-   crtkit.notAfterServer   = time.Now().Add(serverTime)
+   crtkit.notAfterCA = time.Now().Add(CaTime)
+   crtkit.notAfterClient   = time.Now().Add(ClientTime)
+   crtkit.notAfterServer   = time.Now().Add(ServerTime)
 
    e = crtkit.GenerateCA(casubject, host, email)
    if  e != nil {

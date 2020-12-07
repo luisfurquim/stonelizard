@@ -171,6 +171,7 @@ main:
       // Ok, let's get the token
       tok, err = oa.Config.Exchange(ctx, cliCode, oauth2.AccessTypeOffline)
       if err != nil {
+         Goose.Auth.Logf(1,"oa.Config.Exchange error: %s", err)
          if state != "" {
             oa.Session[oid]["state"] = ""
          }
@@ -183,6 +184,7 @@ main:
          continue
       }
 
+      Goose.Auth.Logf(0,"9")
       oa.SetCookie(oid, hname, resp)
       oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 

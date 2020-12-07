@@ -21,6 +21,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var fldName    string
    var prm       *SwaggerParameterT
    var title      string
+   var jsonName   string
 
    Goose.Swagger.Logf(6,"Parameter type : %d: %s",parm.Kind(),parm)
 
@@ -235,7 +236,12 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
             }
          } else {
 
-            schemaPtr, item.Schema.Required, err = fieldHandle(field.Name, field)
+            jsonName = strings.Split(field.Tag.Get("json"),",")[0]
+            if jsonName != "" {
+               schemaPtr, item.Schema.Required, err = fieldHandle(jsonName, field)
+            } else {
+               schemaPtr, item.Schema.Required, err = fieldHandle(field.Name, field)
+            }
             if err != nil {
                return nil, err
             }
@@ -243,7 +249,18 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
                continue
             }
 
-            item.Schema.Properties[field.Name] = *schemaPtr
+            if jsonName != "" {
+/*
+               if schemaPtr.Type == "object" {
+                  schemaPtr.Title = jsonName
+               } else if schemaPtr.Type == "array" || schemaPtr.Type == "map" {
+                  aggrIndentifierRE
+               }
+*/
+               item.Schema.Properties[jsonName] = *schemaPtr
+            } else {
+               item.Schema.Properties[field.Name] = *schemaPtr
+            }
          }
 
       }

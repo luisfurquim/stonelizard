@@ -74,6 +74,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var num                      int
    var mod, out, outvar         string
    var extAuth                  ExtAuthT
+   var swpath                   string
+   var tags                 [][]string
+   var tag                    []string
+   var propParm                *SwaggerParameterT
+   var propField                reflect.StructField
 
    for _, svc = range svcs {
 
@@ -110,16 +115,24 @@ func New(svcs ...EndPointHandler) (*Service, error) {
       }
 
       if resp.Swagger == nil {
-         for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
+//         for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
+         for i=0; i < typ.NumField(); i++ {
+            fld = typ.Field(i)
             if svcRoot == "" {
-               svcRoot = typ.Field(i).Tag.Get("root")
+               svcRoot = fld.Tag.Get("root")
                if svcRoot != "" {
-                  svcConsumes = typ.Field(i).Tag.Get("consumes")
-                  svcProduces = typ.Field(i).Tag.Get("produces")
-                  allowGzip   = typ.Field(i).Tag.Get("allowGzip")
-                  enableCORS  = typ.Field(i).Tag.Get("enableCORS")
-                  if typ.Field(i).Tag.Get("proto") != "" {
-                     svcProto    = strings.Split(strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("proto")," ")),",")
+                  svcConsumes = fld.Tag.Get("consumes")
+                  svcProduces = fld.Tag.Get("produces")
+                  allowGzip   = fld.Tag.Get("allowGzip")
+                  enableCORS  = fld.Tag.Get("enableCORS")
+                  swpath      = fld.Tag.Get("swagger")
+
+                  if swpath == "root" {
+                     resp.SwaggerPath = svcRoot
+                  }
+
+                  if fld.Tag.Get("proto") != "" {
+                     svcProto    = strings.Split(strings.ToLower(strings.Trim(fld.Tag.Get("proto")," ")),",")
                      _, _, err = validateProtoList(svcProto)
                      if err != nil {
                         Goose.New.Logf(1,"Error validating global protocol list: %s", err)
@@ -129,10 +142,10 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                      svcProto    = []string{"https"}
                   }
 
-                  Goose.New.Logf(3,"Access tag: %s", typ.Field(i).Tag.Get("access"))
+                  Goose.New.Logf(3,"Access tag: %s", fld.Tag.Get("access"))
 
-                  if typ.Field(i).Tag.Get("access") != "" {
-                     switch strings.ToLower(strings.Trim(typ.Field(i).Tag.Get("access")," ")) {
+                  if fld.Tag.Get("access") != "" {
+                     switch strings.ToLower(strings.Trim(fld.Tag.Get("access")," ")) {
                         case "none":
                            resp.Access = AccessNone
                         case "auth":
@@ -153,31 +166,60 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                }
             }
             if swaggerInfo.Title == "" {
-               stmp = typ.Field(i).Tag.Get("title")
+               stmp = fld.Tag.Get("title")
                if stmp != "" {
                   swaggerInfo.Title          = stmp
-                  swaggerInfo.Description    = typ.Field(i).Tag.Get("description")
-                  swaggerInfo.TermsOfService = typ.Field(i).Tag.Get("tos")
-                  swaggerInfo.Version        = typ.Field(i).Tag.Get("version")
+                  swaggerInfo.Description    = fld.Tag.Get("description")
+                  swaggerInfo.TermsOfService = fld.Tag.Get("tos")
+                  swaggerInfo.Version        = fld.Tag.Get("version")
                   globalDataCount++
                }
             }
             if swaggerContact.Name == "" {
-               stmp = typ.Field(i).Tag.Get("contact")
+               stmp = fld.Tag.Get("contact")
                if stmp != "" {
                   swaggerContact.Name  = stmp
-                  swaggerContact.Url   = typ.Field(i).Tag.Get("url")
-                  swaggerContact.Email = typ.Field(i).Tag.Get("email")
+                  swaggerContact.Url   = fld.Tag.Get("url")
+                  swaggerContact.Email = fld.Tag.Get("email")
                   globalDataCount++
                }
             }
             if swaggerLicense.Name == "" {
-               stmp = typ.Field(i).Tag.Get("license")
+               stmp = fld.Tag.Get("license")
                if stmp != "" {
                   swaggerLicense.Name  = stmp
-                  swaggerLicense.Url   = typ.Field(i).Tag.Get("url")
+                  swaggerLicense.Url   = fld.Tag.Get("url")
                   globalDataCount++
                }
+            }
+
+            Goose.New.Logf(1,"Is %s a module?", fld.Name)
+            if fld.Type == ModType {
+               Goose.New.Logf(1,"Module %s found", fld.Name)
+               if swaggerInfo.XModules == nil {
+                  Goose.New.Logf(1,"Module %s Init", fld.Name)
+                  swaggerInfo.XModules = map[string]map[string]*SwaggerSchemaT{}
+               }
+
+               swaggerInfo.XModules[fld.Name] = map[string]*SwaggerSchemaT{}
+
+               tags = tagRE.FindAllStringSubmatch(string(fld.Tag),-1)
+               for _, tag = range tags {
+                  Goose.New.Logf(1,"Prop %s: %s", tag[1], tag[2])
+                  propField, ok = typ.FieldByName(tag[2])
+                  if !ok {
+                     Goose.New.Logf(1,"Error: %s", ErrorUndefPropType)
+                     return nil, ErrorUndefPropType
+                  }
+
+                  propParm, err = GetSwaggerType(propField.Type)
+                  if err != nil {
+                     Goose.New.Logf(1,"Error checking type of module: %s",err)
+                     return nil, err
+                  }
+                  swaggerInfo.XModules[fld.Name][tag[1]] = propParm.Schema
+               }
+
             }
          }
 
@@ -638,9 +680,13 @@ func New(svcs ...EndPointHandler) (*Service, error) {
       }
    }
 
-   Goose.New.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
+//   Goose.New.Logf(6,"Operations matcher: %s\n",reAllOps[1:])
    Goose.New.Logf(6,"Operations %#v\n",resp.Svc)
-   resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
+   if len(reAllOps) > 0 {
+      resp.Matcher = regexp.MustCompile(reAllOps[1:]) // Cutting the leading '|'
+   } else {
+      resp.Matcher = regexp.MustCompile(reAllOps)
+   }
 
    if extAuth, ok = resp.Authorizer.(ExtAuthT); ok {
       resp.ch = make(chan ExtAuthorizeIn)

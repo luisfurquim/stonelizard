@@ -347,6 +347,7 @@ func (ck *CertKit) LoadUserData() error {
                         ck.UserCerts[usrKey] = &UserDB{Cert: ClientCert}
                      } else {
                         Goose.Loader.Logf(1,"Error decoding certificate for %s: %s", usrKey, err)
+                        Goose.Loader.Logf(1,"cert:%s", ClientCertRaw.(string))
                      }
                   default:
                      Goose.Loader.Logf(1,"Error reading certificate for %s: %s", usrKey, err)
@@ -442,28 +443,28 @@ func (ck *CertKit) AddUserData(usrKey string, ClientCert *x509.Certificate) erro
 }
 
 func (ck *CertKit) SetServerYearValidity(notBefore time.Time, validityServerCert int) {
-	//If not set by application use default
-	if validityServerCert == 0 {
-		ck.notAfterServer =  notBefore.Add(serverTime)
-	} else { //Apply validate time defined by application
-		ck.notAfterServer = notBefore.AddDate(validityServerCert,0,0)
-	}
+   //If not set by application use default
+   if validityServerCert == 0 {
+      ck.notAfterServer =  notBefore.Add(ServerTime)
+   } else { //Apply validate time defined by application
+      ck.notAfterServer = notBefore.AddDate(validityServerCert,0,0)
+   }
 }
 
 func (ck *CertKit) SetClientYearValidity(notBefore time.Time, validityClientCert int)  {
-	//If not set by application use default
-	if validityClientCert == 0 {
-		ck.notAfterClient = notBefore.Add(clientTime)
-	} else { //Apply validate time defined by application
-		ck.notAfterClient = notBefore.AddDate(validityClientCert,0,0)
-	}
+   //If not set by application use default
+   if validityClientCert == 0 {
+      ck.notAfterClient = notBefore.Add(ClientTime)
+   } else { //Apply validate time defined by application
+      ck.notAfterClient = notBefore.AddDate(validityClientCert,0,0)
+   }
 }
 
 func (ck *CertKit) SetCAYearValidity(notBefore time.Time, validityCACert int) {
-	//If not set by application use default
-	if validityCACert == 0 {
-		ck.notAfterCA = notBefore.Add(caTime)
-	}	else { //Apply validate time defined by application
-		ck.notAfterCA =  notBefore.AddDate(validityCACert,0,0)
-	}
+   //If not set by application use default
+   if validityCACert == 0 {
+      ck.notAfterCA = notBefore.Add(CaTime)
+   }  else { //Apply validate time defined by application
+      ck.notAfterCA =  notBefore.AddDate(validityCACert,0,0)
+   }
 }
