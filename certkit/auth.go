@@ -23,7 +23,7 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
    Goose.Auth.Logf(0,"Peer certificates: %#v", Goose)
    for _, cert = range TLS.PeerCertificates {
       Goose.Auth.Logf(5,"ck.UserCerts: %#v",ck.UserCerts)
-      Goose.Auth.Logf(6,"Peer certificate: %#v",cert)
+      Goose.Auth.Logf(7,"Peer certificate: %#v",cert)
       Goose.Auth.Logf(5,"Peer certificate: #%s, ID: %s, Issuer: %s, Subject: %s, \n\n\n",cert.SerialNumber,cert.SubjectKeyId,cert.Issuer.CommonName,cert.Subject.CommonName)
       if UserCert, ok = ck.UserCerts[cert.Subject.CommonName]; ok {
          Goose.Auth.Logf(5,"1")

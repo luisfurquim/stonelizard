@@ -3,6 +3,7 @@ package stonelizard
 import (
    "io"
    "net"
+   "bytes"
    "errors"
    "regexp"
    "reflect"
@@ -11,6 +12,7 @@ import (
    "crypto/tls"
    "crypto/x509"
    "mime/multipart"
+   "crypto/x509/pkix"
    "golang.org/x/net/websocket"
    "github.com/luisfurquim/goose"
    "github.com/luisfurquim/strtree"
@@ -222,6 +224,38 @@ type Service struct {
    SwaggerPath        string
 }
 
+type Pki interface{
+   GenerateClientCSR(subject pkix.Name, email string) ([]byte, error)
+   GenerateClient(asn1Data []byte) (*x509.Certificate, *rsa.PublicKey, error)
+   NewPemCertReqFromReader(rd io.Reader) error
+   NewPemCertFromMemory(buf []byte) error
+   NewPemCertFromReader(rd io.Reader) error
+   NewPemCertFromFile(fname string) error
+   NewPemKeyFromMemory(buf []byte, password string) error
+   NewPemKeyFromReader(rd io.Reader, password string) error
+   NewPemKeyFromFile(fname string, password string) error
+   PemKey(password string) ([]byte, error)
+   PemKeyToFile(fname, password string) error
+   PemCsr(der []byte, fname string) error
+   NewPemCert(fname string) error
+   Sign(msg string) ([]byte, error)
+   Verify(msg string, signature []byte) error
+   Encrypt(msg []byte) ([]byte, error)
+   Decrypt(secret []byte) ([]byte, error)
+   Challenge() ([]byte, []byte, error)
+   QrKeyId(keyId string, challenge []byte) ([]byte, error)
+   FindCertificate(keyId string) (Pki, string, error)
+   Certificate() []byte
+}
+
+type ServiceWithPKI struct {
+   Service
+   PK Pki
+}
+
+type ReadCloser struct {
+   Rd *bytes.Reader
+}
 
 type ResponseT struct {
    Description string
@@ -242,6 +276,7 @@ const (
    AccessAuthInfo
    AccessVerifyAuth
    AccessVerifyAuthInfo
+   AccessInfo
 )
 
 const StatusTrigEvent = 275

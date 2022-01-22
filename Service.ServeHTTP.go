@@ -9,9 +9,11 @@ import (
    "reflect"
    "net/http"
    "math/rand"
+   "crypto/x509"
    "encoding/xml"
    "encoding/json"
    "compress/gzip"
+   "encoding/base64"
    "golang.org/x/net/websocket"
 )
 
@@ -254,7 +256,7 @@ gzipcheck:
 
    Goose.Serve.Logf(5,"svc.Access level: %d",svc.Access)
    err = nil
-   if svc.Access != AccessNone {
+   if svc.Access != AccessNone && svc.Access != AccessInfo {
 
       defer func() {
          // Tries to survive to any panic from the application.
@@ -307,9 +309,21 @@ gzipcheck:
    }
 
    if err == nil {
+      Goose.Serve.Logf(0,"check authinfo")
       Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
-      if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo {
+      if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo && svc.Access != AccessInfo{
          authinfo = nil
+      } else if svc.Access == AccessInfo {
+         certBuf := r.Header.Get("X-Request-Signer-Certificate")
+         if len(certBuf) > 0 {
+            cert, err := base64.StdEncoding.DecodeString(certBuf)
+            if err == nil {
+               authinfo, err = x509.ParseCertificate(cert)
+               if err != nil {
+                  authinfo = nil
+               }
+            }
+         }
       }
 
       resp = endpoint.Handle(parms,umrsh,authinfo,r.Host,r.RemoteAddr)

@@ -190,8 +190,11 @@ func NewFromCK(path string) (*CertKit, error) {
 
    r, err := zip.OpenReader(fmt.Sprintf("%s%c%s.ck",path, os.PathSeparator,hn))
    if err != nil {
-      Goose.Loader.Logf(1,"Error decompressing certificate archive: %s",err)
-      return nil, err
+      r, err = zip.OpenReader(fmt.Sprintf("%s%clocalhost.ck",path, os.PathSeparator))
+      if err != nil {
+         Goose.Loader.Logf(1,"Error decompressing certificate archive: %s",err)
+         return nil, err
+      }
    }
    defer r.Close()
 
@@ -230,9 +233,12 @@ func (ck *CertKit) Setup(udata map[string]interface{}) error {
 
 func (ck *CertKit) LoadUserData() error {
    var err error
+   var path string
 
+   path = fmt.Sprintf("%s%cclient",ck.Path, os.PathSeparator)
+   Goose.Loader.Logf(2,"Reading path: %s", path)
 
-   err = filepath.Walk(fmt.Sprintf("%s%cclient",ck.Path, os.PathSeparator), func (path string, f os.FileInfo, err error) error {
+   err = filepath.Walk(path, func (path string, f os.FileInfo, err error) error {
       var ClientCert *x509.Certificate
 
 //      Goose.Loader.Logf(0,"read path: %s", path)

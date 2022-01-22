@@ -80,16 +80,19 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var propParm                *SwaggerParameterT
    var propField                reflect.StructField
 
-   for _, svc = range svcs {
+   Goose.New.Logf(6,"Initializing services: %#v", svcs)
 
-      Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
+   for _, svc = range svcs {
+      Goose.New.Logf(0,"-----------")
+//      Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
+//      Goose.New.Logf(0,"-----------")
       if reflect.ValueOf(svc).Kind() == reflect.Ptr {
-         Goose.New.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
+//         Goose.New.Logf(6,"Elem: %#v", reflect.ValueOf(svc).Elem())
          svcElem = reflect.ValueOf(svc).Elem().Interface().(EndPointHandler)
-         Goose.New.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
+//         Goose.New.Logf(6,"Elem type: %s, ptr type: %s", reflect.TypeOf(svcElem), reflect.TypeOf(svc))
       } else {
          svcElem = svc
-         Goose.New.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
+//         Goose.New.Logf(6,"Elem type: %s", reflect.TypeOf(svcElem))
       }
 
       // The first endpoint handler MUST have a config defined, otherwise we'll ignore endpoint handlers until we find one which provides a configuration
@@ -156,6 +159,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                            resp.Access = AccessVerifyAuth
                         case "verifyauthinfo":
                            resp.Access = AccessVerifyAuthInfo
+                        case "info":
+                           resp.Access = AccessInfo
                      }
                      Goose.New.Logf(3,"Custom access type: %d", resp.Access)
                   } else {
@@ -298,6 +303,13 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   for j=0; j<typ.NumMethod(); j++ {
                      mt := typ.Method(j)
                      Goose.New.Logf(5,"%d: %s",j,mt.Name)
+                  }
+
+                  Goose.New.Logf(5,"*|methods|=%d",typPtr.NumMethod())
+                  Goose.New.Logf(5,"*type=%s.%s",typPtr.PkgPath(),typPtr.Name())
+                  for j=0; j<typPtr.NumMethod(); j++ {
+                     mt := typPtr.Method(j)
+                     Goose.New.Logf(5,"%d: *%s",j,mt.Name)
                   }
 
                   Goose.New.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
@@ -449,7 +461,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
 
             num = method.Type.NumIn()
-            if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo {
+            if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo || resp.Access == AccessInfo {
                if (parmcount+1) != num {
                   parmcount++
                   if (parmcount != (num-3)) || (num<2) || (method.Type.In(num-2).Kind()!=reflect.String) || (method.Type.In(num-1).Kind()!=reflect.String) {
