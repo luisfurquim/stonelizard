@@ -3,6 +3,7 @@ package certkit
 import (
    "os"
    "fmt"
+   "net"
    "time"
    "errors"
    "strings"
@@ -41,6 +42,7 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
    var e           error
    var derBytes  []byte
    var notBefore   time.Time
+   var ips       []net.IP
 
    priv, err := rsa.GenerateKey(rand.Reader, 2048)
    if err != nil {
@@ -61,6 +63,19 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
       host, _ = os.Hostname()
    }
 
+   if subject.CommonName == "" {
+      if (len(strings.Split(host,".")) == 1) && (host!="localhost") {
+         ips, err = net.LookupIP(host)
+         if err == nil && len(ips)>0 {
+            subject.CommonName = ips[0].String()
+         } else {
+            subject.CommonName = "localhost"
+         }
+      } else {
+         subject.CommonName = "*." + host
+      }
+   }
+
    Goose.Generator.Logf(6,"Certificate authority used: %#v", crtkit.CACert)
 
    template := x509.Certificate{
@@ -70,10 +85,20 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
       NotBefore:             notBefore,
       NotAfter:              notBefore.Add(365*24*time.Hour),
       DNSNames:              []string{host, strings.Split(host,".")[0]},
+      SubjectKeyId:          []byte(fmt.Sprintf("%s",priv.PublicKey.N)),
       AuthorityKeyId:        crtkit.CACert.SubjectKeyId,
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+      PolicyIdentifiers:     []asn1.ObjectIdentifier{
+         []int{1, 3, 6, 1, 5, 5, 7, 3, 1},
+         []int{1, 3, 6, 1, 5, 5, 7, 3, 2},
+      },
       BasicConstraintsValid: true,
+   }
+
+   ips, err = net.LookupIP(host)
+   if err == nil {
+      template.IPAddresses = ips
    }
 
    Goose.Generator.Logf(4,"X509 Template: %#v", template)
@@ -102,6 +127,8 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenp
    var e          error
    var derBytes []byte
    var crlurl     string
+   var port       string
+   var ips       []net.IP
 //   var ecBytes  []byte
 
 //   priv, err := ecdsa.GenerateKey(elliptic.P521(),rand.Reader)
@@ -120,10 +147,19 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenp
       host, _ = os.Hostname()
    }
 
-   if len(listenport) == 0 {
-      crlurl = "http://" + host + "/rootCA.crl"
+   if len(listenport) > 0 {
+      port = ":" + listenport[0]
+   }
+
+   if (len(strings.Split(host,".")) == 1) && (host!="localhost") {
+      ips, err = net.LookupIP(host)
+      if err == nil && len(ips)>0 {
+         crlurl = "http://" + ips[0].String() + port + "/rootCA.crl"
+      } else {
+         crlurl = "http://localhost" + port + "/rootCA.crl"
+      }
    } else {
-      crlurl = "http://" + host + ":" + listenport[0] + "/rootCA.crl"
+      crlurl = "http://" + host + port + "/rootCA.crl"
    }
 
    template := x509.Certificate{
@@ -139,8 +175,13 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenp
       PolicyIdentifiers:     []asn1.ObjectIdentifier{[]int{2, 16, 76, 1, 1, 0}}, // Policy: 2.16.76.1.1.0 CPS: http://acraiz.icpbrasil.gov.br/DPCacraiz.pdf
       CRLDistributionPoints: []string{crlurl},
 
-      KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+      KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
       BasicConstraintsValid: true,
+   }
+
+   ips, err = net.LookupIP(host)
+   if err == nil {
+      template.IPAddresses = ips
    }
 
    crtkit.CAKey                = priv

@@ -42,6 +42,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var proto                  string
    var extAuth                ExtAuthT
    var origHost               string
+   var parts                []string
 
    Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
 
@@ -125,7 +126,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //Access-Control-Allow-Methods: POST, GET, OPTIONS
 //Access-Control-Allow-Headers: X-PINGOTHER
 //Access-Control-Allow-Origin: *
-      hd.Add("Access-Control-Allow-Headers", strings.Join(endpoint.Headers,", "))
+      hd.Add("Access-Control-Allow-Headers", strings.Join(append(endpoint.Headers,"Content-Type"),", "))
       w.WriteHeader(http.StatusOK)
       w.Write([]byte("OK"))
       return
@@ -232,28 +233,6 @@ gzipcheck:
       }
    }
 
-   if endpoint.produces == "application/json" {
-      mrsh = json.NewEncoder(outWriter)
-      hd.Add("Content-Type","application/json")
-   } else if endpoint.produces == "application/xml" {
-      mrsh = xml.NewEncoder(outWriter)
-      hd.Add("Content-Type","application/xml")
-   } else if (endpoint.produces == "application/javascript") || (len(endpoint.produces)>=5 && endpoint.produces[:5] == "text/") {
-      mrsh = NewStaticEncoder(outWriter)
-      hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
-   } else if endpoint.produces == "application/octet-stream" {
-      mrsh = NewStaticEncoder(outWriter)
-      hd.Add("Content-Type","application/octet-stream")
-   } else if endpoint.produces == "*" {
-      mrsh = NewStaticEncoder(outWriter)
-   } else {
-      errmsg := fmt.Sprintf("Internal server error determining response mimetype")
-      Goose.Serve.Logf(1,errmsg)
-      w.WriteHeader(http.StatusInternalServerError)
-      w.Write([]byte(errmsg))
-      return
-   }
-
    Goose.Serve.Logf(5,"svc.Access level: %d",svc.Access)
    err = nil
    if svc.Access != AccessNone && svc.Access != AccessInfo {
@@ -308,251 +287,284 @@ gzipcheck:
       //Goose.Serve.Fatalf(0,"%d %#v %s", httpstat, authinfo, err)
    }
 
-   if err == nil {
-      Goose.Serve.Logf(0,"check authinfo")
-      Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
-      if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo && svc.Access != AccessInfo{
-         authinfo = nil
-      } else if svc.Access == AccessInfo {
-         certBuf := r.Header.Get("X-Request-Signer-Certificate")
-         if len(certBuf) > 0 {
-            cert, err := base64.StdEncoding.DecodeString(certBuf)
-            if err == nil {
-               authinfo, err = x509.ParseCertificate(cert)
-               if err != nil {
-                  authinfo = nil
-               }
+   if err != nil {
+      Goose.Serve.Logf(1,"Authorization failure with HTTP Status %d and error %s", httpstat, err)
+      w.WriteHeader(httpstat)
+      return
+   }
+
+   Goose.Serve.Logf(0,"check authinfo")
+   Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
+   if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo && svc.Access != AccessInfo{
+      authinfo = nil
+   } else if svc.Access == AccessInfo {
+      certBuf := r.Header.Get("X-Request-Signer-Certificate")
+      if len(certBuf) > 0 {
+         cert, err := base64.StdEncoding.DecodeString(certBuf)
+         if err == nil {
+            authinfo, err = x509.ParseCertificate(cert)
+            if err != nil {
+               authinfo = nil
             }
          }
       }
+   }
 
-      resp = endpoint.Handle(parms,umrsh,authinfo,r.Host,r.RemoteAddr)
-      if useWebSocket && resp.Status < http.StatusMultipleChoices && resp.Status >= http.StatusOK {
-         websocket.Handler(func (ws *websocket.Conn) {
-            //endpoint.Handle(parms,umrsh,authinfo)
-            var op *WSocketOperation
-            var err error
-            var codec websocket.Codec
-            var request []interface{}
-            var trackid int64
-            var opName string
-            var opi interface{}
-            var obj reflect.Value
-            var ins []reflect.Value
-            var WSResponse Response
-            var wg sync.WaitGroup
-            var startwg sync.WaitGroup
-            var sessionId = rand.Intn(100000)
-            var evHandlers map[string]*WSEventTrigger
-            var name string
-            var ev *WSEventTrigger
-            var i int
-            var evName interface{}
-            var sIns string
-            var rval reflect.Value
-            var met reflect.Method
-            var ok bool
+   resp = endpoint.Handle(parms,umrsh,authinfo,r.Host,r.RemoteAddr)
+   if useWebSocket && resp.Status < http.StatusMultipleChoices && resp.Status >= http.StatusOK {
+      websocket.Handler(func (ws *websocket.Conn) {
+         //endpoint.Handle(parms,umrsh,authinfo)
+         var op *WSocketOperation
+         var err error
+         var codec websocket.Codec
+         var request []interface{}
+         var trackid int64
+         var opName string
+         var opi interface{}
+         var obj reflect.Value
+         var ins []reflect.Value
+         var WSResponse Response
+         var wg sync.WaitGroup
+         var startwg sync.WaitGroup
+         var sessionId = rand.Intn(100000)
+         var evHandlers map[string]*WSEventTrigger
+         var name string
+         var ev *WSEventTrigger
+         var i int
+         var evName interface{}
+         var sIns string
+         var rval reflect.Value
+         var met reflect.Method
+         var ok bool
 
-            Goose.OpHandle.Logf(2,"Websocket start") //5
+         Goose.OpHandle.Logf(2,"Websocket start") //5
 
-            if endpoint.consumes == "application/json" {
-               codec = websocket.JSON
+         if endpoint.consumes == "application/json" {
+            codec = websocket.JSON
 //            } else if endpoint.consumes == "application/xml" {
 //               codec = websocket.Message
+         }
+
+         obj = reflect.ValueOf(resp.Body)
+
+         evHandlers = map[string]*WSEventTrigger{}
+
+         Goose.OpHandle.Logf(2,"Websocket configuring events") //5
+         startwg.Add(1)
+         wsEventHandle(ws, codec, resp.Body, &wg, evHandlers, &startwg)
+         startwg.Wait()
+         Goose.OpHandle.Logf(3,"Websocket events configured") //5
+
+         wsMainLoop:
+         for {
+            Goose.OpHandle.Logf(5,"Websocket loop start") //5
+            err = codec.Receive(ws, &request)
+            Goose.OpHandle.Logf(6,"Websocket Received: %s",request) //5
+            if err != nil {
+               if err == io.EOF {
+                  Goose.Serve.Logf(1,"Ending websocket session %d for %s",sessionId, endpoint.Path)
+               } else {
+                  Goose.Serve.Logf(1,"Websocket protocol error: %s",err)
+               }
+               if err = ws.Close(); err != nil {
+                  Goose.Serve.Logf(1,"Error closing websocket connection: %s",err)
+               }
+
+               met, ok = obj.Type().MethodByName("OnClose")
+               if ok {
+                  met.Func.Call([]reflect.Value{obj})
+               }
+               break
             }
 
-            obj = reflect.ValueOf(resp.Body)
+            // callID , procedureName, requestData
+            if len(request) < 3 {
+               Goose.Serve.Logf(1,"Websocket protocol error: %s",WrongParameterLength)
+               break
+            }
 
-            evHandlers = map[string]*WSEventTrigger{}
+            switch request[0].(type) {
+               case float64:
+               trackid = int64(request[0].(float64))
+               default:
+                  Goose.Serve.Logf(1,"Websocket protocol error %s @0: %T",WrongParameterType,request[0])
+                  break wsMainLoop
+            }
 
-            Goose.OpHandle.Logf(2,"Websocket configuring events") //5
-            startwg.Add(1)
-            wsEventHandle(ws, codec, resp.Body, &wg, evHandlers, &startwg)
-            startwg.Wait()
-            Goose.OpHandle.Logf(3,"Websocket events configured") //5
-
-            wsMainLoop:
-            for {
-               Goose.OpHandle.Logf(5,"Websocket loop start") //5
-               err = codec.Receive(ws, &request)
-               Goose.OpHandle.Logf(6,"Websocket Received: %s",request) //5
-               if err != nil {
-                  if err == io.EOF {
-                     Goose.Serve.Logf(1,"Ending websocket session %d for %s",sessionId, endpoint.Path)
-                  } else {
-                     Goose.Serve.Logf(1,"Websocket protocol error: %s",err)
-                  }
-                  if err = ws.Close(); err != nil {
-                     Goose.Serve.Logf(1,"Error closing websocket connection: %s",err)
-                  }
-
-                  met, ok = obj.Type().MethodByName("OnClose")
-                  if ok {
-                     met.Func.Call([]reflect.Value{obj})
-                  }
-                  break
-               }
-
-               // callID , procedureName, requestData
-               if len(request) < 3 {
-                  Goose.Serve.Logf(1,"Websocket protocol error: %s",WrongParameterLength)
-                  break
-               }
-
-               switch request[0].(type) {
-                  case float64:
-                  trackid = int64(request[0].(float64))
-                  default:
-                     Goose.Serve.Logf(1,"Websocket protocol error %s @0: %T",WrongParameterType,request[0])
-                     break wsMainLoop
-               }
-
-               switch request[1].(type) {
-                  case string:
-                     opName = request[1].(string)
-                  default:
-                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: %d @1", trackid, WrongParameterType)
-                     break wsMainLoop
-               }
+            switch request[1].(type) {
+               case string:
+                  opName = request[1].(string)
+               default:
+                  Goose.Serve.Logf(1,"[%d] Websocket protocol error: %d @1", trackid, WrongParameterType)
+                  break wsMainLoop
+            }
 
 
-               if opName == "bind" { // reserved word
-                  parmOk := true
-                  Goose.Serve.Logf(6,"[%d] Websocket bind request %#v", trackid, request)//3
-                  bindFor:
-                  for i, evName = range request[2:] {
-                     switch evName.(type) {
-                        case string:
-                           if eh, ok := evHandlers[evName.(string)]; ok {
-                              eh.Status = true
-                           } else {
-                              parmOk = false
-                              Goose.Serve.Logf(1,"[%d] Websocket bind event %s not found, id: %d", trackid, evName.(string))
-                              codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
-                              break bindFor
-                           }
-                        default:
+            if opName == "bind" { // reserved word
+               parmOk := true
+               Goose.Serve.Logf(6,"[%d] Websocket bind request %#v", trackid, request)//3
+               bindFor:
+               for i, evName = range request[2:] {
+                  switch evName.(type) {
+                     case string:
+                        if eh, ok := evHandlers[evName.(string)]; ok {
+                           eh.Status = true
+                        } else {
                            parmOk = false
-                           Goose.Serve.Logf(1,"[%d] Websocket bind event protocol error %s: @%d", trackid, WrongParameterType, i)
+                           Goose.Serve.Logf(1,"[%d] Websocket bind event %s not found, id: %d", trackid, evName.(string))
                            codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
                            break bindFor
-                     }
-                  }
-                  if parmOk {
-                     Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))//3
-                     codec.Send(ws, []interface{}{trackid, http.StatusOK})
-                     met, ok = obj.Type().MethodByName("OnBind")
-                     if ok {
-                        met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
-                     }
-                  }
-               } else if opName == "unbind" { // reserved word
-                  parmOk := true
-                  unbindFor:
-                  for i, evName = range request[2:] {
-                     switch evName.(type) {
-                        case string:
-                           if eh, ok := evHandlers[evName.(string)]; ok {
-                              eh.Status = false
-                           } else {
-                              parmOk = false
-                              Goose.Serve.Logf(1,"[%d] Websocket unbind event %s not found, id: %d", trackid, evName.(string))
-                              codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
-                              break unbindFor
-                           }
-                        default:
-                           parmOk = false
-                           Goose.Serve.Logf(1,"[%d] Websocket unbind event protocol error %s: @%d", trackid, WrongParameterType, i)
-                           codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
-                           break unbindFor
-                     }
-                  }
-                  if parmOk {
-                     Goose.Serve.Logf(3,"[%d] Websocket unbound event %s", evName.(string), trackid)
-                     codec.Send(ws, []interface{}{trackid, http.StatusOK})
-                     met, ok = obj.Type().MethodByName("OnUnbind")
-                     if ok {
-                        met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
-                     }
-                  }
-               } else {
-                  opi, err = endpoint.WSocketOperations.Get(opName)
-                  if err != nil {
-                     Goose.Serve.Logf(1,"Operation lookup failure %s",err)
-                     break
-                  }
-                  op = opi.(*WSocketOperation)
-
-                  request, ok = request[2].([]interface{})
-
-                  if !ok {
-                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: 3rd parameter must be array", trackid)
-                     break
-                  }
-
-                  if op.CallByRef {
-                     ins, err = pushParms(request, obj, op.Method)
-                  } else {
-                     ins, err = pushParms(request, reflect.Indirect(obj), op.Method)
-                  }
-
-                  if err != nil {
-                     Goose.Serve.Logf(1,"[%d] Websocket protocol error: %s @1", trackid, err)
-                     break
-                  }
-
-                  for _, rval = range ins {
-                     sIns += fmt.Sprintf("%#v, ",rval.Interface())
-                  }
-                  if len(sIns) > 0 {
-                     sIns = sIns[:len(sIns)-2]
-                  }
-                  Goose.OpHandle.Logf(5,"Calling websocket operation with: %s",sIns) //5
-                  retData := op.Method.Func.Call(ins)
-                  sIns = ""
-                  for _, rval = range retData {
-                     sIns += fmt.Sprintf("%#v, ",rval.Interface())
-                  }
-                  if len(sIns) > 0 {
-                     sIns = sIns[:len(sIns)-2]
-                  }
-                  Goose.OpHandle.Logf(5,"Websocket operation retData: %s",retData) //5
-
-                  WSResponse = retData[0].Interface().(Response)
-
-                  if WSResponse.Body == nil {
-                     // callID , status (no content)
-                     Goose.Serve.Logf(4,"[%d] Websocket send no content", trackid)
-                     codec.Send(ws, []interface{}{trackid, WSResponse.Status})
-                  } else {
-                     // callID , status, response
-                     Goose.Serve.Logf(4,"[%d] Websocket send %#v", trackid, WSResponse.Body)
-                     codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+                        }
+                     default:
+                        parmOk = false
+                        Goose.Serve.Logf(1,"[%d] Websocket bind event protocol error %s: @%d", trackid, WrongParameterType, i)
+                        codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                        break bindFor
                   }
                }
+               if parmOk {
+                  Goose.Serve.Logf(3,"[%d] Websocket bound event %s", trackid, evName.(string))//3
+                  codec.Send(ws, []interface{}{trackid, http.StatusOK})
+                  met, ok = obj.Type().MethodByName("OnBind")
+                  if ok {
+                     met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
+                  }
+               }
+            } else if opName == "unbind" { // reserved word
+               parmOk := true
+               unbindFor:
+               for i, evName = range request[2:] {
+                  switch evName.(type) {
+                     case string:
+                        if eh, ok := evHandlers[evName.(string)]; ok {
+                           eh.Status = false
+                        } else {
+                           parmOk = false
+                           Goose.Serve.Logf(1,"[%d] Websocket unbind event %s not found, id: %d", trackid, evName.(string))
+                           codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                           break unbindFor
+                        }
+                     default:
+                        parmOk = false
+                        Goose.Serve.Logf(1,"[%d] Websocket unbind event protocol error %s: @%d", trackid, WrongParameterType, i)
+                        codec.Send(ws, []interface{}{trackid, WrongParameterType, i})
+                        break unbindFor
+                  }
+               }
+               if parmOk {
+                  Goose.Serve.Logf(3,"[%d] Websocket unbound event %s", evName.(string), trackid)
+                  codec.Send(ws, []interface{}{trackid, http.StatusOK})
+                  met, ok = obj.Type().MethodByName("OnUnbind")
+                  if ok {
+                     met.Func.Call([]reflect.Value{obj, reflect.ValueOf(evName.(string))})
+                  }
+               }
+            } else {
+               opi, err = endpoint.WSocketOperations.Get(opName)
+               if err != nil {
+                  Goose.Serve.Logf(1,"Operation lookup failure %s",err)
+                  break
+               }
+               op = opi.(*WSocketOperation)
 
-               Goose.Serve.Logf(4,"[%d] Websocket message sent", trackid)
+               request, ok = request[2].([]interface{})
+
+               if !ok {
+                  Goose.Serve.Logf(1,"[%d] Websocket protocol error: 3rd parameter must be array", trackid)
+                  break
+               }
+
+               if op.CallByRef {
+                  ins, err = pushParms(request, obj, op.Method)
+               } else {
+                  ins, err = pushParms(request, reflect.Indirect(obj), op.Method)
+               }
+
+               if err != nil {
+                  Goose.Serve.Logf(1,"[%d] Websocket protocol error: %s @1", trackid, err)
+                  break
+               }
+
+               for _, rval = range ins {
+                  sIns += fmt.Sprintf("%#v, ",rval.Interface())
+               }
+               if len(sIns) > 0 {
+                  sIns = sIns[:len(sIns)-2]
+               }
+               Goose.OpHandle.Logf(5,"Calling websocket operation with: %s",sIns) //5
+               retData := op.Method.Func.Call(ins)
+               sIns = ""
+               for _, rval = range retData {
+                  sIns += fmt.Sprintf("%#v, ",rval.Interface())
+               }
+               if len(sIns) > 0 {
+                  sIns = sIns[:len(sIns)-2]
+               }
+               Goose.OpHandle.Logf(5,"Websocket operation retData: %s",retData) //5
+
+               WSResponse = retData[0].Interface().(Response)
+
+               if WSResponse.Body == nil {
+                  // callID , status (no content)
+                  Goose.Serve.Logf(4,"[%d] Websocket send no content", trackid)
+                  codec.Send(ws, []interface{}{trackid, WSResponse.Status})
+               } else {
+                  // callID , status, response
+                  Goose.Serve.Logf(4,"[%d] Websocket send %#v", trackid, WSResponse.Body)
+                  codec.Send(ws, []interface{}{trackid, WSResponse.Status, WSResponse.Body})
+               }
             }
 
-            // stop all event triggers
-            for name, ev = range evHandlers {
-               Goose.Serve.Logf(1,"Event channel close for %s",name)
-               close(ev.EventData)
-            }
+            Goose.Serve.Logf(4,"[%d] Websocket message sent", trackid)
+         }
 
-            wg.Wait()
-         }).ServeHTTP(w,r)
+         // stop all event triggers
+         for name, ev = range evHandlers {
+            Goose.Serve.Logf(1,"Event channel close for %s",name)
+            close(ev.EventData)
+         }
+
+         wg.Wait()
+      }).ServeHTTP(w,r)
+      return
+   }
+
+   if endpoint.produces == "application/json" {
+      Goose.Serve.Logf(1,"Using json encoder")
+      mrsh = json.NewEncoder(outWriter)
+      hd.Add("Content-Type","application/json")
+   } else if endpoint.produces == "application/xml" {
+      mrsh = xml.NewEncoder(outWriter)
+      hd.Add("Content-Type","application/xml")
+   } else if (endpoint.produces == "application/javascript") || (len(endpoint.produces)>=5 && endpoint.produces[:5] == "text/") {
+      mrsh = NewStaticEncoder(outWriter)
+      hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
+   } else if endpoint.produces == "application/octet-stream" {
+      mrsh = NewStaticEncoder(outWriter)
+      hd.Add("Content-Type","application/octet-stream")
+   } else {
+      parts = strings.Split(endpoint.produces,";")
+      if parts[0] == "*" {
+         Goose.Serve.Logf(1,"Using static encoder")
+         if len(parts)>1 && parts[1]=="base64" {
+            mrsh = NewStaticBase64Encoder(outWriter)
+         } else {
+            mrsh = NewStaticEncoder(outWriter)
+         }
+      } else {
+         errmsg := fmt.Sprintf("Internal server error determining response mimetype")
+         Goose.Serve.Logf(1,errmsg)
+         w.WriteHeader(http.StatusInternalServerError)
+         w.Write([]byte(errmsg))
          return
       }
+   }
 
-      if resp.Status != 0 {
-         for k, v := range resp.Header {
-            hd.Add(k, v)
-         }
-         w.WriteHeader(resp.Status)
+   if resp.Status != 0 {
+      for k, v := range resp.Header {
+         hd.Add(k, v)
       }
-
-
+      w.WriteHeader(resp.Status)
       if resp.Status != http.StatusNoContent {
          err = mrsh.Encode(resp.Body)
          if err!=nil {
@@ -560,17 +572,8 @@ gzipcheck:
             return
          }
       }
-   } else {
-      Goose.Serve.Logf(1,"Authorization failure with HTTP Status %d and error %s", httpstat, err)
-      w.WriteHeader(httpstat)
-      if httpstat != http.StatusNoContent {
-         err = mrsh.Encode(fmt.Sprintf("%s",err))
-         if err!=nil {
-            Goose.Serve.Logf(1,"Internal server error writing response body (no body sent to client): %s",err)
-            return
-         }
-      }
    }
+
 }
 
 

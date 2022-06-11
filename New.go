@@ -247,7 +247,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             } else {
                authdns := resp.Authorizer.GetDNSNames()
                if len(authdns) > 0 {
-                  hostport[0] = authdns[0]
+                  if len(strings.Split(authdns[0],".")) == 1 {
+                     hostport[0] = resp.Authorizer.GetServerCert().IPAddresses[0].String()
+                  } else {
+                     hostport[0] = authdns[0]
+                  }
                } else {
                   hostport[0] = "0.0.0.0"
                }

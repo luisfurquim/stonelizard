@@ -254,13 +254,13 @@ main:
       err = json.NewDecoder(oaResp.Body).Decode(pf)
    //
 
-      email = pf.Email() + "_"
+      email = strings.ToLower(pf.Email()) + "_"
       trusted, err = oa.GetTrusted()
       if err == nil {
          Goose.Auth.Logf(0,"find cert")
          for key, certdata = range trusted {
             Goose.Auth.Logf(0,"cert-key: %s -- %s", key, email)
-            if strings.HasPrefix(key, email) {
+            if strings.HasPrefix(strings.ToLower(key), email) {
                block, _  := pem.Decode([]byte(certdata.(map[string]interface {})["cert"].(string)))
                cert, err  = x509.ParseCertificate(block.Bytes)
                if err == nil {

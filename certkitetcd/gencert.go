@@ -67,6 +67,10 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
       host, _ = os.Hostname()
    }
 
+   if subject.CommonName == "" {
+      subject.CommonName = "https://" + host
+   }
+
    Goose.Generator.Logf(6,"Certificate authority used: %#v", crtkit.CACert)
 
    template := x509.Certificate{
@@ -80,6 +84,10 @@ func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, Not
       AuthorityKeyId:        crtkit.CACert.SubjectKeyId,
       KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature | x509.KeyUsageContentCommitment,
       ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+      PolicyIdentifiers:     []asn1.ObjectIdentifier{
+         []int{1, 3, 6, 1, 5, 5, 7, 3, 1},
+         []int{1, 3, 6, 1, 5, 5, 7, 3, 2},
+      },
       BasicConstraintsValid: true,
    }
 
@@ -152,7 +160,7 @@ func (crtkit *CertKit) GenerateCA(subject pkix.Name, host, email string, listenp
       PolicyIdentifiers:     []asn1.ObjectIdentifier{[]int{2, 16, 76, 1, 1, 0}}, // Policy: 2.16.76.1.1.0 CPS: http://acraiz.icpbrasil.gov.br/DPCacraiz.pdf
       CRLDistributionPoints: []string{crlurl},
 
-      KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+      KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
       BasicConstraintsValid: true,
    }
 

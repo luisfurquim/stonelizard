@@ -136,6 +136,10 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
    var tlsConfig *tls.Config
    var roots     *x509.CertPool
 
+   // Code adapted from crypto/x509/root_unix.go
+   roots = x509.NewCertPool()
+   roots.AppendCertsFromPEM(ck.CACertPem)
+
    switch Access {
       case stonelizard.AccessNone:
          atype = tls.NoClientCert
@@ -144,9 +148,6 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
       case stonelizard.AccessVerifyAuth, stonelizard.AccessVerifyAuthInfo:
          atype = tls.RequireAndVerifyClientCert
 
-         // Code adapted from crypto/x509/root_unix.go
-         roots = x509.NewCertPool()
-         roots.AppendCertsFromPEM(ck.CACertPem)
 /*
          for _, directory := range CertDirectories {
             fis, err := ioutil.ReadDir(directory)

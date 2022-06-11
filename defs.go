@@ -41,6 +41,12 @@ type Static struct {
    w io.Writer
 }
 
+type StaticBase64 struct {
+   w io.WriteCloser
+}
+
+
+
 type StoppableListener struct {
   *net.TCPListener           // Wrapped listener
    stop             chan int // Channel used only to indicate listener should shutdown

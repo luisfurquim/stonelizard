@@ -6,7 +6,7 @@ import (
 )
 
 
-func (d *Static) Encode(v interface{}) error {
+func (d *StaticBase64) Encode(v interface{}) error {
    var err error
    var src io.Reader
    var ch <-chan []byte
@@ -15,7 +15,6 @@ func (d *Static) Encode(v interface{}) error {
    var n int64
    var m int
    var sum int
-   var closer io.WriteCloser
 
    if src, ok = v.(io.Reader); ok {
       Goose.Serve.Logf(1,"Using reader")
@@ -34,9 +33,7 @@ func (d *Static) Encode(v interface{}) error {
       Goose.Serve.Logf(1,"Written %d bytes", m)
    }
 
-   if closer, ok = v.(io.WriteCloser); ok {
-      closer.Close()
-   }
+   d.w.Close()
 
    return err
 }

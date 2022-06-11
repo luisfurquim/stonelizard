@@ -177,8 +177,10 @@ Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
       if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo || accesstype == AccessInfo {
          Goose.OpHandle.Logf(0,"Checking the need for appending authinfo")
          if (len(ins)+1) == num || (len(ins)+3) == num {
-            Goose.OpHandle.Logf(7,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
-            ins = append(ins,reflect.ValueOf(authinfo))
+            if reflect.ValueOf(authinfo).IsValid() {
+               Goose.OpHandle.Logf(7,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
+               ins = append(ins,reflect.ValueOf(authinfo))
+            }
          }
       }
 

@@ -64,48 +64,87 @@ func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAd
 
 //func (ck *CertKit) GetTLSConfig(AuthRequired bool) (*tls.Config, error) {
 func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
-   var atype      tls.ClientAuthType
-   var tlsConfig *tls.Config
-   var roots     *x509.CertPool
+   var atype         tls.ClientAuthType
+   var tlsConfig    *tls.Config
+   var roots        *x509.CertPool
+   var keyPair       tls.Certificate
+//   var serverKeyPair tls.Certificate
+//   var caKeyPair     tls.Certificate
+   var err           error
+   var bundle      []byte
+
+   // Code adapted from crypto/x509/root_unix.go
+   if ck.CertPool == nil {
+      ck.CertPool = x509.NewCertPool()
+   }
+   roots = ck.CertPool
+
+   for _, directory := range CertDirectories {
+      fis, err := ioutil.ReadDir(directory)
+      if err != nil {
+         Goose.Auth.Logf(5,"Error scanning certificate directory %s: %s",directory,err)
+         continue
+      }
+      for _, fi := range fis {
+         data, err := ioutil.ReadFile(fmt.Sprintf("%s%c%s",directory,os.PathSeparator,fi.Name()))
+         if err != nil {
+            Goose.Auth.Logf(5,"Error load CA certificate from %s%c%s: %s",directory,os.PathSeparator,fi.Name(),err)
+            continue
+         }
+         Goose.Auth.Logf(5,"Loaded CA certificate from %s%c%s: %s",directory,os.PathSeparator,fi.Name(),err)
+
+         roots.AppendCertsFromPEM(data)
+      }
+   }
 
    switch Access {
-      case stonelizard.AccessNone:
+      case stonelizard.AccessNone, stonelizard.AccessInfo:
          atype = tls.NoClientCert
       case stonelizard.AccessAuth, stonelizard.AccessAuthInfo:
          atype = tls.RequestClientCert
       case stonelizard.AccessVerifyAuth, stonelizard.AccessVerifyAuthInfo:
          atype = tls.RequireAndVerifyClientCert
 
-         // Code adapted from crypto/x509/root_unix.go
-         roots = x509.NewCertPool()
 
-         for _, directory := range CertDirectories {
-            fis, err := ioutil.ReadDir(directory)
-            if err != nil {
-               Goose.Auth.Logf(5,"Error scanning certificate directory %s: %s",directory,err)
-               continue
-            }
-            for _, fi := range fis {
-               data, err := ioutil.ReadFile(fmt.Sprintf("%s%c%s",directory,os.PathSeparator,fi.Name()))
-               if err != nil {
-                  Goose.Auth.Logf(5,"Error load CA certificate from %s%c%s: %s",directory,os.PathSeparator,fi.Name(),err)
-                  continue
-               }
-               Goose.Auth.Logf(5,"Loaded CA certificate from %s%c%s: %s",directory,os.PathSeparator,fi.Name(),err)
-
-               roots.AppendCertsFromPEM(data)
-            }
-         }
    }
 
    Goose.Auth.Logf(4,"authtype: %#v",atype)
    Goose.Auth.Logf(5,"CAs: %#v",roots)
+//   caKeyPair, err = tls.X509KeyPair(ck.CACertPem, ck.CAKeyPem)
+//   serverKeyPair, err = tls.X509KeyPair(ck.ServerCertPem, ck.ServerKeyPem)
+//   _ = caKeyPair
+   bundle = append(ck.ServerCertPem, '\n')
+   bundle = append(bundle, ck.CACertPem...)
+
+   keyPair, err = tls.X509KeyPair(bundle, ck.ServerKeyPem)
+   if err != nil {
+      return nil, err
+   }
+
 
    tlsConfig = &tls.Config{
+      MinVersion: 2,
       ClientAuth: atype,
-      ClientCAs: roots,
-//      InsecureSkipVerify: true,
-      Certificates: make([]tls.Certificate, 1),
+//      ClientCAs: roots,
+      RootCAs: roots,
+      InsecureSkipVerify: true,
+      Certificates: []tls.Certificate{
+         keyPair,
+////         ck.ServerX509KeyPair,
+//         caKeyPair,
+//         serverKeyPair,
+/*
+         tls.Certificate{
+            Certificate: [][]byte{
+               bundle,
+////               ck.CACert.Raw,
+//               ck.ServerCert.Raw,
+            },
+            PrivateKey: ck.ServerKey,
+            Leaf: ck.ServerCert,
+         },
+*/
+      },
    }
 
 /*
@@ -116,8 +155,6 @@ func (ck *CertKit) GetTLSConfig(Access uint8) (*tls.Config, error) {
    }
 */
 
-   tlsConfig.Certificates[0] = ck.ServerX509KeyPair
-   Goose.Auth.Logf(0,"X509KeyPair used: %#v",tlsConfig.Certificates[0])//5
    tlsConfig.BuildNameToCertificate()
 
    return tlsConfig, nil

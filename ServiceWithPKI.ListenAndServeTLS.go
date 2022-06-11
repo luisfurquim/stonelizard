@@ -94,6 +94,9 @@ FindEncLoop:
             return
          }
 
+
+//Goose.InitServe.Fatalf(0,"%#v", tc)
+
          Goose.InitServe.Logf(2,"Adding http web service handler")
          mux = http.NewServeMux()
          mux.Handle("/",svc)
@@ -107,7 +110,7 @@ FindEncLoop:
                hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
                svc:&svc.Service,
                path:path,
-               })
+            })
          }
 
          // Configure the server
