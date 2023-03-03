@@ -2,6 +2,8 @@ package sloauth2
 
 import (
    "os"
+   "io"
+   "bytes"
    "strings"
    "context"
    "net/http"
@@ -250,16 +252,37 @@ main:
          continue
       }
 
+
+      buf := new(bytes.Buffer)
+      io.Copy(buf, oaResp.Body)
+
+
+      var msgMapTemplate interface{}
+      var msgMap map[string]interface{}
+      Goose.Auth.Logf(0,"################################## Profile: --------------------------------------------")
+      err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
+      if err == nil {
+         msgMap = msgMapTemplate.(map[string]interface{})
+         for kprof, vprof := range msgMap {
+            Goose.Auth.Logf(0,"Profile: %s -> %s", kprof, vprof)
+         }
+         Goose.Auth.Logf(0,"Profile: %s", buf)
+      } else {
+         Goose.Auth.Logf(0,"Profile error: %s", err)
+      }
+
       pf = oa.UserProfileModel.New()
-      err = json.NewDecoder(oaResp.Body).Decode(pf)
+      err = json.NewDecoder(buf).Decode(pf)
+//       defer oaResp.Body.Close()
+//      err = json.NewDecoder(oaResp.Body).Decode(pf)
    //
 
       email = strings.ToLower(pf.Email()) + "_"
       trusted, err = oa.GetTrusted()
       if err == nil {
-         Goose.Auth.Logf(0,"find cert")
+         Goose.Auth.Logf(4,"find cert")
          for key, certdata = range trusted {
-            Goose.Auth.Logf(0,"cert-key: %s -- %s", key, email)
+            Goose.Auth.Logf(4,"cert-key: %s -- %s", key, email)
             if strings.HasPrefix(strings.ToLower(key), email) {
                block, _  := pem.Decode([]byte(certdata.(map[string]interface {})["cert"].(string)))
                cert, err  = x509.ParseCertificate(block.Bytes)
@@ -276,7 +299,7 @@ main:
          }
       }
 
-      Goose.Auth.Logf(0,"no trusted! %s", err)
+      Goose.Auth.Logf(1,"%s not trusted! %s", email, err)
 
       certpem, _, err = oa.CertKit.(*certkitetcd.CertKit).GenerateClient(
          pkix.Name{CommonName: pf.Name() + " " + pf.SurName() + ":" + pf.Id()},

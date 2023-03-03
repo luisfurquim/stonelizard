@@ -41,6 +41,11 @@ func New(srvsubject, casubject pkix.Name, host, email string) (*CertKit, error) 
    return &crtkit, nil
 }
 
+func (crtkit *CertKit) UpdNotAfter() {
+   crtkit.notAfterCA     = time.Now().Add(CaTime)
+   crtkit.notAfterClient = time.Now().Add(ClientTime)
+   crtkit.notAfterServer = time.Now().Add(ServerTime)
+}
 
 func (crtkit *CertKit) GenerateServer(subject pkix.Name, host, email string, NotBefore ...time.Time) error {
    var e           error
@@ -238,3 +243,50 @@ func (crtkit *CertKit) GenerateClient(subject pkix.Name, email, password string)
 
    return certOut, keyOut, nil
 }
+
+
+func (crtkit *CertKit) GenerateClientParsed(subject pkix.Name, email, password string) (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
+   priv, err := rsa.GenerateKey(rand.Reader, 2048)
+   if err != nil {
+      return nil, nil, nil, errors.New(fmt.Sprintf("failed to generate private key: %s", err))
+   }
+
+   notBefore         := time.Now()
+
+   serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+   if err != nil {
+      return nil, nil, nil, errors.New(fmt.Sprintf("failed to generate serial number: %s", err))
+   }
+
+   template := x509.Certificate{
+      SerialNumber:          serialNumber,
+      Subject:               subject,
+      NotBefore:             notBefore,
+      //NotAfter:             notBefore.Add(3650*24*time.Hour),
+      NotAfter:              crtkit.notAfterClient,
+      EmailAddresses:        []string{email},
+      KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+      ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+      UnknownExtKeyUsage:    []asn1.ObjectIdentifier{
+         []int{1,3,6,1,4,1,311,20,2,2}, // SmartCard Logon
+         []int{1,3,6,1,4,1,311,10,3,16}, // Verify signature for nonrepudiation?
+         //'1.3.6.1.4.1.311.10.3.1' => 'certTrustListSigning'
+         // '1.3.6.1.4.1.311.10.3.12' => 'szOID_KP_DOCUMENT_SIGNING',
+      },
+      BasicConstraintsValid: true,
+   }
+
+
+   derBytes, err := x509.CreateCertificate(rand.Reader, &template, crtkit.CACert, &priv.PublicKey, crtkit.CAKey)
+   if err != nil {
+      return nil, nil, nil, errors.New(fmt.Sprintf("Failed to create certificate: %s", err))
+   }
+
+   cert, err := x509.ParseCertificate(derBytes)
+
+   certOut := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+
+   return cert, priv, certOut, err
+}
+
+

@@ -107,7 +107,8 @@ FindEncLoop:
                hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
                svc:svc,
                path:path,
-               })
+               exported: exported,
+            })
          }
 
          // Configure the server
@@ -116,6 +117,8 @@ FindEncLoop:
             Handler: mux,
             TLSConfig: tc,
          }
+
+         Goose.InitServe.Logf(1,"Listening on: %s", srv.Addr)
 
          // Configure the listener
 //         Goose.InitServe.Fatalf(0,"svc %# v: \n\n\n %# v", pretty.Formatter(svc), pretty.Formatter(svc.Listener))

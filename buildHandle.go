@@ -49,13 +49,19 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
             var p reflect.Value
             var tmp string
             var i int
+            var fNamePart []string
 
             buf  = make([]byte, size)
             buf  = buf[:runtime.Stack(buf, false)]
             srcs = strings.Split(string(buf),"\n")
             for _, src = range srcs {
                if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
-                  srcs2 = append(srcs2,gosrcFNameRE.FindStringSubmatch(src)[1])
+						fNamePart = gosrcFNameRE.FindStringSubmatch(src)
+						if len(fNamePart) > 1 {
+							srcs2 = append(srcs2,fNamePart[1])
+						} else {
+							srcs2 = append(srcs2,"___---NoName---___")
+						}
                }
             }
 
@@ -113,11 +119,11 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
 //                  Goose.OpHandle.Logf(1,"posttype: %#v, postdata: %s",posttype, postdata)
       Goose.OpHandle.Logf(5,"posttype: %#v",posttype)
       if posttype != nil { // Adds data sent through HTTP POST
-Goose.OpHandle.Logf(0,"1")
+//Goose.OpHandle.Logf(0,"1")
          err = nil
          j   = 0
          for (err==nil) && (j<len(posttype)) {
-Goose.OpHandle.Logf(0,"2")
+//Goose.OpHandle.Logf(0,"2")
             Goose.OpHandle.Logf(6,"posttype[%d]: %#v",j,posttype[j])
             // Allocate room for the next parameter
             postvalue = reflect.New(posttype[j])
@@ -125,7 +131,7 @@ Goose.OpHandle.Logf(0,"2")
             Goose.OpHandle.Logf(6,"postvalue.Interface(): %#v",postvalue.Interface())
             err = Unmarshal.Decode(postvalue.Interface())
             if err != nil && err != io.EOF {
-Goose.OpHandle.Logf(0,"3")
+//Goose.OpHandle.Logf(0,"3")
                // Return HTTP error
                httpResp.Status = http.StatusInternalServerError
                httpResp.Body   = "Internal server error"
@@ -141,9 +147,9 @@ Goose.OpHandle.Logf(0,"3")
                return httpResp
             }
 
-Goose.OpHandle.Logf(0,"4")
+//Goose.OpHandle.Logf(0,"4")
 //            if err != io.EOF {
-Goose.OpHandle.Logf(0,"5")
+//Goose.OpHandle.Logf(0,"5")
                Goose.OpHandle.Logf(6,"postvalue.Kind() = %d",reflect.Indirect(postvalue).Kind())
                Goose.OpHandle.Logf(6,"postvalue = %s",reflect.Indirect(postvalue).Interface())
                if reflect.Indirect(postvalue).Kind() == reflect.String {
@@ -173,12 +179,12 @@ Goose.OpHandle.Logf(0,"5")
       // If the application required, we must provide the authenticated user information to the method.
       // This is done by adding it as the last parameter
       Goose.OpHandle.Logf(8,"ins3: %d:%s",len(ins),ins)
-Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
+//Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
       if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo || accesstype == AccessInfo {
          Goose.OpHandle.Logf(0,"Checking the need for appending authinfo")
          if (len(ins)+1) == num || (len(ins)+3) == num {
             if reflect.ValueOf(authinfo).IsValid() {
-               Goose.OpHandle.Logf(7,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())
+//               Goose.OpHandle.Logf(0,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())//7
                ins = append(ins,reflect.ValueOf(authinfo))
             }
          }
@@ -200,8 +206,9 @@ Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
             }
             Goose.OpHandle.Logf(8,"Operation has these parameters: this, %s",sIns)
          } else {
-            for _, in := range ins[1:] {
+            for ii, in := range ins[1:] {
                sdbg += fmt.Sprintf("[%s], ",in.Interface())
+               Goose.OpHandle.Logf(1,"%d: [%#v], ", ii, in.Interface())
             }
             errmsg = fmt.Sprintf("Operation call with wrong input argument count: expected:%d, received:%d -> %s", num, len(ins), sdbg)
             Goose.OpHandle.Logf(1,errmsg)

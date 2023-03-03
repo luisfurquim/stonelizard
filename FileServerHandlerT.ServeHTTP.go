@@ -1,10 +1,12 @@
 package stonelizard
 
 import (
+	"os"
    "fmt"
    "strings"
    "runtime"
    "net/http"
+   "path/filepath"
 )
 
 func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -14,6 +16,9 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var authparms map[string]interface{}
    var qry, header string
    var ok bool
+   var etag string
+   var fi os.FileInfo
+   var exported string
 
    defer func() {
       // Tries to survive to any panic from the application.
@@ -85,6 +90,39 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
          return
       }
    }
+
+	if fs.exported == "" {
+		fs.exported = "."
+	}
+
+	exported, err = filepath.Abs(fs.exported)
+	if err != nil {
+		Goose.Serve.Logf(1,"Error normalizing exported path %s: %s", exported, err)
+		w.WriteHeader(http.StatusInternalServerError)
+//		w.Write([]byte(fmt.Sprintf("%s",err)))
+//		w.Write([]byte(fs.exported + "/" + r.URL.Path))
+		return
+	}
+
+	fi, err = os.Stat(exported + "/" + r.URL.Path)
+	if err != nil {
+		Goose.Serve.Logf(1,"Error stating path %s: %s", exported + "/" + r.URL.Path, err)
+		w.WriteHeader(http.StatusInternalServerError)
+//		w.Write([]byte(fmt.Sprintf("%s",err)))
+//		w.Write([]byte(exported + "/" + r.URL.Path))
+		return
+	}
+
+	etag = `"` + fi.ModTime().Format("20060102150405") + `"`
+	w.Header().Set("Etag", etag)
+
+
+   if match := r.Header.Get("If-None-Match"); match != "" {
+		if strings.Contains(match, etag) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
 
    fs.hnd.ServeHTTP(w,r)
 }

@@ -43,6 +43,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var extAuth                ExtAuthT
    var origHost               string
    var parts                []string
+   var optional					bool
 
    Goose.Serve.Logf(1,"Access %s+%s %s from %s", r.Proto, r.Method, r.URL.Path, r.RemoteAddr)
 
@@ -134,15 +135,27 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    r.ParseForm()
    for _, qry = range endpoint.Query {
+		if qry[0] == '?' {
+			optional = true
+			qry = qry[1:]
+		} else {
+			optional = false
+		}
       if _, ok := r.Form[qry]; !ok {
-         errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredQueryField,qry)
-         Goose.Serve.Logf(1,errmsg)
-         w.WriteHeader(http.StatusBadRequest)
-         w.Write([]byte(errmsg))
-         return
-      }
-      parms = append(parms,r.Form[qry][0]) // TODO array support
-      j++
+			if optional {
+				parms = append(parms,"") // TODO array support
+				j++
+			} else {
+				errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredQueryField,qry)
+				Goose.Serve.Logf(1,errmsg)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errmsg))
+				return
+			}
+      } else {
+			parms = append(parms,r.Form[qry][0]) // TODO array support
+			j++
+		}
    }
    for qry, _ = range r.Form {
       authparms[qry] = r.Form[qry][0]
@@ -153,17 +166,32 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    Goose.Serve.Logf(6,"r.Form with query: %#v",r.Form)
 
    for _, header = range endpoint.Headers {
+		if header[0] == '?' {
+			optional = true
+			header = header[1:]
+		} else {
+			optional = false
+		}
+
+		header = strings.ToUpper(header[:1]) + header[1:]
+		
       if _, ok = r.Header[header]; !ok {
 //      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
-         errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredHTTPHeader,header)
-         Goose.Serve.Logf(1,errmsg)
-         Goose.Serve.Logf(6,"HTTP Headers found: %#v",r.Header)
-         w.WriteHeader(http.StatusBadRequest)
-         w.Write([]byte(errmsg))
-         return
-      }
-      parms = append(parms,r.Header[header][0]) // TODO array support
-      j++
+			if optional {
+				parms = append(parms,"") // TODO array support
+				j++
+			} else {
+				errmsg := fmt.Sprintf("%s: %s",ErrorMissingRequiredHTTPHeader,header)
+				Goose.Serve.Logf(1,errmsg)
+				Goose.Serve.Logf(6,"HTTP Headers found: %#v",r.Header)
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(errmsg))
+				return
+			}
+      } else {
+			parms = append(parms,r.Header[header][0]) // TODO array support
+			j++
+		}
    }
    for header, _ = range r.Header {
       authparms[header] = r.Header[header][0]

@@ -6,6 +6,7 @@ import (
    "net/http"
    "encoding/base64"
 )
+//2022/11/22 02:28:06 {paracentric}[paracentric.go]<(*PkiT).Verify>(414): Error from verification: crypto/rsa: verification error
 
 func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    var err error
@@ -25,6 +26,7 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       if err == nil {
          upk, usertype, err = svc.PK.FindCertificate(r.Header.Get("X-Request-Signer"))
          if err == nil {
+				Goose.InitServe.Logf(0,"Certificate found: %#v", upk)
             msgToVerify = strings.ToUpper(r.Method) + "+" + r.URL.String()
 
             buf, err = io.ReadAll(r.Body)
@@ -39,8 +41,13 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
                r.Header.Set("X-Request-Signer-Certificate", base64.StdEncoding.EncodeToString(upk.Certificate()))
                r.Header.Set("X-Request-Signer-Type", usertype)
             }
+			} else {
+				Goose.InitServe.Logf(0,"Certificate not found: %s", r.Header.Get("X-Request-Signer"))
+				Goose.InitServe.Logf(0,"Certificates: %#v", svc.PK)
          }
-      }
+      } else {
+			Goose.InitServe.Logf(0,"Signature not found: %s", r.Header.Get("X-Request-Signature"))
+		}
    }
    svc.Service.ServeHTTP(w,r)
 }

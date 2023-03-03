@@ -272,6 +272,7 @@ type FileServerHandlerT struct {
    hnd http.Handler
    svc *Service
    path string
+   exported string
 }
 
 type PublicAccessT struct {}

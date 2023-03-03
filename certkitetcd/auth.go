@@ -16,7 +16,8 @@ import (
    "golang.org/x/net/context"
    "github.com/luisfurquim/stonelizard"
    "github.com/luisfurquim/etcdconfig"
-   etcd "github.com/coreos/etcd/client"
+//   etcd "github.com/coreos/etcd/client"
+   etcd github.com/etcd-io/etcd/client/v2
 )
 
 func certKey(cert *x509.Certificate) string {

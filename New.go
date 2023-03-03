@@ -120,6 +120,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
       if resp.Swagger == nil {
 //         for i=0; (i<typ.NumField()) && (globalDataCount<4); i++ {
          for i=0; i < typ.NumField(); i++ {
+
+
+				if stnlzrd, ok := fld.Tag.Lookup("stonelizard") ; ok && stnlzrd == "ignore" {
+					continue
+				}
             fld = typ.Field(i)
             if svcRoot == "" {
                svcRoot = fld.Tag.Get("root")
@@ -564,6 +569,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
 
                resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
+
+               if re[0] == '/' {
+						re = re[1:]
+					}
+
                reComp                           = regexp.MustCompile(rePrtMethod + re)
                MatchedOpsIndex                 += reComp.NumSubexp() + 1
 

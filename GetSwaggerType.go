@@ -22,6 +22,8 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    var prm       *SwaggerParameterT
    var title      string
    var jsonName   string
+   var ignore		string
+   var ok			bool
 
    Goose.Swagger.Logf(6,"Parameter type : %d: %s",parm.Kind(),parm)
 
@@ -180,6 +182,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
       for i=0; i<parm.NumField(); i++ {
          field = parm.Field(i)
 
+			if ignore, ok = field.Tag.Lookup("swagger"); ok && ignore=="-" {
+				continue
+			}
+
          if field.Name[:1] == strings.ToLower(field.Name[:1]) {
             continue // Unexported field
          }
@@ -265,8 +271,8 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
       }
 
-      Goose.Swagger.Logf(0,"Got final struct: %#v",item)//6
-      Goose.Swagger.Logf(0,"Got final struct: %#v",item.Schema)//6
+      Goose.Swagger.Logf(2,"Got final struct: %#v",item)//6
+      Goose.Swagger.Logf(2,"Got final struct: %#v",item.Schema)//6
       return item, nil
    }
 
