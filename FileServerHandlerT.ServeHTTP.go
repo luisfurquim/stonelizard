@@ -95,7 +95,17 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fs.exported = "."
 	}
 
+	if (len(fs.path) > len(r.URL.Path)) || (fs.path != r.URL.Path[:len(fs.path)]) {
+		Goose.Serve.Logf(1,"Invalid path %s", r.URL.Path)
+		w.WriteHeader(http.StatusBadRequest)
+//		w.Write([]byte(fmt.Sprintf("%s",err)))
+//		w.Write([]byte(fs.exported + "/" + r.URL.Path))
+		return
+	}
+
 	exported, err = filepath.Abs(fs.exported)
+	Goose.Serve.Logf(1,"exported: [%s], path: [%s], err:[%s]", exported, r.URL.Path[len(fs.path):], err)
+
 	if err != nil {
 		Goose.Serve.Logf(1,"Error normalizing exported path %s: %s", exported, err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -104,9 +114,9 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fi, err = os.Stat(exported + "/" + r.URL.Path)
+	fi, err = os.Stat(exported + "/" + r.URL.Path[len(fs.path):])
 	if err != nil {
-		Goose.Serve.Logf(1,"Error stating path %s: %s", exported + "/" + r.URL.Path, err)
+		Goose.Serve.Logf(1,"Error stating path %s: %s", exported + "/" + r.URL.Path[len(fs.path):], err)
 		w.WriteHeader(http.StatusInternalServerError)
 //		w.Write([]byte(fmt.Sprintf("%s",err)))
 //		w.Write([]byte(exported + "/" + r.URL.Path))

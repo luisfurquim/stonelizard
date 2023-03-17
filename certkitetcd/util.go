@@ -18,7 +18,9 @@ import (
    "golang.org/x/net/context"
    "github.com/luisfurquim/etcdconfig"
 //   etcd "github.com/coreos/etcd/client"
-   etcd github.com/etcd-io/etcd/client/v2
+//   etcd "github.com/etcd-io/etcd/client/v2"
+//   etcd "github.com/etcd-io/etcd/client/v3"
+   etcd "go.etcd.io/etcd/client/v2"
 )
 
 //Load in memory and decodes the certificate from the reader
