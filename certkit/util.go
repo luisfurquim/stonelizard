@@ -264,3 +264,12 @@ func (ck *CertKit) LoadUserData() error {
 
    return err
 }
+
+func SetCreatePolicy(policy byte) error {
+	if policy != PolicyCreateCertAsPending && policy != PolicyCreateCertAsTrusted {
+		return ErrInvalidPolicy 
+	}
+
+	policyCreateCert = policy
+	return nil
+}

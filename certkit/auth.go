@@ -253,8 +253,10 @@ func (ck *CertKit) GetPending() (map[string]interface{}, error) {
 func (ck *CertKit) SavePending(cert *x509.Certificate) error {
    var err error
    var fname string
+   var id string
 
-   fname = fmt.Sprintf("%s%cpending%c%s.crt", ck.Path, os.PathSeparator, os.PathSeparator, strings.Replace(cert.Subject.CommonName," ","_",-1))
+	id = strings.Replace(cert.Subject.CommonName," ","_",-1)
+   fname = fmt.Sprintf("%s%cpending%c%s.crt", ck.Path, os.PathSeparator, os.PathSeparator, id)
 
    _, err = os.Stat(fname)
    if !os.IsNotExist(err) {
@@ -267,6 +269,10 @@ func (ck *CertKit) SavePending(cert *x509.Certificate) error {
       Goose.Auth.Logf(1,"Error writing file %s: %s", fname, err)
       return err
    }
+
+   if policyCreateCert == PolicyCreateCertAsTrusted {
+		ck.Trust(id)
+	}
 
    return nil
 }

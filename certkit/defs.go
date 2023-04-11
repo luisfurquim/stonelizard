@@ -23,6 +23,11 @@ type Shaper interface {
 }
 */
 
+const (
+	PolicyCreateCertAsPending byte = iota
+	PolicyCreateCertAsTrusted
+)
+
 type CertKit struct {
    Path                       string
    ServerCertPem, CACertPem []byte
@@ -45,9 +50,11 @@ type CertkitG struct {
 
 var Goose  CertkitG
 
-var ErrorCertsMustHaveKeys = errors.New("Either provide both certificate and key or none of them")
-var ErrorUnauthorized      = errors.New("Unauthorized access attempt")
-var ErrorDuplicateFile      = errors.New("Error duplicate file")
+var ErrorCertsMustHaveKeys error = errors.New("Either provide both certificate and key or none of them")
+var ErrorUnauthorized      error = errors.New("Unauthorized access attempt")
+var ErrorDuplicateFile     error = errors.New("Error duplicate file")
+var ErrInvalidPolicy       error = errors.New("Error invalid policy")
+var policyCreateCert	      byte  = PolicyCreateCertAsPending
 
 var CertDirectories = []string{
    "/etc/ssl/certs",
