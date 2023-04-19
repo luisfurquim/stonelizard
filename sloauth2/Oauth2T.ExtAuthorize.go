@@ -14,6 +14,7 @@ import (
    "crypto/x509/pkix"
    "golang.org/x/oauth2"
    "github.com/luisfurquim/stonelizard"
+   "github.com/luisfurquim/stonelizard/certkit"
    "github.com/luisfurquim/stonelizard/certkitetcd"
 )
 
@@ -58,6 +59,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
    var certpem []byte
    var certIface interface{}
    var in stonelizard.ExtAuthorizeIn
+	var msgMapTemplate interface{}
 
 //   var path string
    var parms map[string]interface{}
@@ -190,59 +192,12 @@ main:
       oa.SetCookie(oid, hname, resp)
       oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
-   /*
-      oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.OIDMetaEndPoint)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-      buf, err = ioutil.ReadAll(oaResp.Body)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-
-      Goose.Auth.Logf(0,"OIDMetaEndPoint: %s", buf)
-
-
-      oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.JSONWKSEndPoint)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-      buf, err = ioutil.ReadAll(oaResp.Body)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-
-      Goose.Auth.Logf(0,"JSONWKSEndPoint: %s", buf)
-
-
-      oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.TokInfEndPoint)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-      buf, err = ioutil.ReadAll(oaResp.Body)
-      if err != nil {
-         Goose.Auth.Fatalf(0,"Erro: %s", err)
-      }
-
-
-
-      Goose.Auth.Logf(0,"TokInfEndPoint: %s", buf)
-   //   Goose.Auth.Fatalf(0,"success: %#v", oaResp)
-   */
-
-
-
       rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
       rq.Header.Add("Authorization", `Bearer ` + tok.AccessToken)
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
-      if err != nil {
+      if err != nil || oaResp.Status[0] != '2' {
          Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
          in.Out<- stonelizard.ExtAuthorizeOut{
             Stat: 0,
@@ -252,33 +207,28 @@ main:
          continue
       }
 
-
       buf := new(bytes.Buffer)
       io.Copy(buf, oaResp.Body)
 
-
-      var msgMapTemplate interface{}
-      var msgMap map[string]interface{}
-      Goose.Auth.Logf(0,"################################## Profile: --------------------------------------------")
-      err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
-      if err == nil {
-         msgMap = msgMapTemplate.(map[string]interface{})
-         for kprof, vprof := range msgMap {
-            Goose.Auth.Logf(0,"Profile: %s -> %s", kprof, vprof)
-         }
-         Goose.Auth.Logf(0,"Profile: %s", buf)
-      } else {
-         Goose.Auth.Logf(0,"Profile error: %s", err)
-      }
-
-      pf = oa.UserProfileModel.New()
-      err = json.NewDecoder(buf).Decode(pf)
+		if oa.UserProfileModel == nil {
+			err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
+			if err == nil {
+				pf = MinimalProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
+			}
+		} else {
+			pf = oa.UserProfileModel.New()
+			err = json.NewDecoder(buf).Decode(pf)
+		}
 //       defer oaResp.Body.Close()
 //      err = json.NewDecoder(oaResp.Body).Decode(pf)
    //
 
+		Goose.Auth.Logf(0, "Email: --%s--", pf.Email())
+
       email = strings.ToLower(pf.Email()) + "_"
+      Goose.Auth.Logf(0,"email: [%s]", email)
       trusted, err = oa.GetTrusted()
+      Goose.Auth.Logf(0,"trusted: [%#v]", trusted)
       if err == nil {
          Goose.Auth.Logf(4,"find cert")
          for key, certdata = range trusted {
@@ -301,38 +251,53 @@ main:
 
       Goose.Auth.Logf(1,"%s not trusted! %s", email, err)
 
-      certpem, _, err = oa.CertKit.(*certkitetcd.CertKit).GenerateClient(
-         pkix.Name{CommonName: pf.Name() + " " + pf.SurName() + ":" + pf.Id()},
-         pf.Email(),
-         "")
+		switch ck := oa.CertKit.(type) {
+		case *certkitetcd.CertKit:
+			certpem, _, err = ck.GenerateClient(
+				pkix.Name{CommonName: pf.Name() + " " + pf.SurName() + ":" + pf.Id()},
+				pf.Email(),
+				"")
+		case *certkit.CertKit:
+			certpem, _, err = ck.GenerateClient(
+				pkix.Name{CommonName: pf.Name() + " " + pf.SurName() + ":" + pf.Id()},
+				pf.Email(),
+				"")
+		}
 
       block, _  := pem.Decode(certpem)
       cert, err  = x509.ParseCertificate(block.Bytes)
       if err == nil {
-         err = oa.CertKit.(*certkitetcd.CertKit).SavePending(cert)
+			switch ck := oa.CertKit.(type) {
+			case *certkitetcd.CertKit:
+				if oa.SavePending != nil {
+					err = oa.SavePending(cert, ck)
+				} else {
+					err = ck.SavePending(cert)
+				}
+			case *certkit.CertKit:
+				if oa.SavePending != nil {
+					err = oa.SavePending(cert, ck)
+				} else {
+					err = ck.SavePending(cert)
+				}
+			}
       }
 
       if err != nil {
-         Goose.Auth.Logf(1,"Err generating certificate for user logged with oauth2? %2", err)
+         Goose.Auth.Logf(1,"Err generating certificate for user logged with oauth2? %s", err)
+			in.Out<- stonelizard.ExtAuthorizeOut{
+				Stat: 0,
+				Data: nil,
+				Err: ErrorUnauthorized,
+			}
+			continue
       }
 
-   /*
-      cert = &x509.Certificate{
-         Issuer: pkix.Name{
-            CommonName: "StoneLizard OAuth2 Authorizer",
-         },
-         Subject: pkix.Name{
-            CommonName: pf.Name() + " " + pf.SurName() + ":" + pf.Id(),
-         },
-         EmailAddresses: []string{pf.Email()},
-      }
-   */
-   //   Goose.Auth.Fatalf(0,"UsrInfEndPoint: %#v", pf)
-   //   Goose.Auth.Fatalf(0,"success: %#v", oaResp)
+		oa.Session[oid]["cert"] = cert
       in.Out<- stonelizard.ExtAuthorizeOut{
          Stat: 0,
-         Data: nil,
-         Err: ErrorUnauthorized,
+         Data: cert,
+         Err: nil,
       }
       continue
    }

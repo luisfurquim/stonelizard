@@ -239,6 +239,7 @@ func (o *Oauth2T) GetPending() (map[string]interface{}, error) {
 }
 
 func (o *Oauth2T) GetTrusted() (map[string]interface{}, error) {
+	Goose.Auth.Logf(4,"o.CertKit: %#v", o.CertKit)
    return o.CertKit.GetTrusted()
 }
 

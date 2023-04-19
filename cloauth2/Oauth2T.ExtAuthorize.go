@@ -123,7 +123,7 @@ main:
       // Ok, let's get the token
       tok, err = oa.Config.Exchange(ctx, cliCode, oauth2.AccessTypeOffline)
       if err != nil {
-         Goose.Auth.Logf(1,"oa.Config.Exchange error: %s", err)
+         Goose.Auth.Logf(0,"oa.Config.Exchange error: %s", err)//1
          if state != "" {
             oa.Session[oid]["state"] = ""
          }

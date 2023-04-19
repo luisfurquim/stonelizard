@@ -287,7 +287,9 @@ gzipcheck:
             srcs = strings.Split(string(buf),"\n")
             for _, src = range srcs {
                if gosrcRE.MatchString(src) && (!gorootRE.MatchString(src)) {
-                  srcs2 = append(srcs2,gosrcFNameRE.FindStringSubmatch(src)[1])
+						if len(gosrcFNameRE.FindStringSubmatch(src)) > 1 {
+							srcs2 = append(srcs2,gosrcFNameRE.FindStringSubmatch(src)[1])
+						}
                }
             }
 
