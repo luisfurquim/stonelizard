@@ -314,7 +314,7 @@ func (oa *Oauth2T) SetCookie(oid string, hname string, resp http.ResponseWriter)
 //         Expires    time.Time // optional
       HttpOnly: true,
       MaxAge: 3600 * 24,
-      Secure: true,
+      Secure: oa.Secure,
 //      SameSite: http.SameSiteStrictMode,
 //      SameSite: http.SameSiteLaxMode,
       SameSite: http.SameSiteNoneMode,
@@ -343,6 +343,9 @@ func (oa *Oauth2T) NewSession(hname string, resp http.ResponseWriter) {
    var state string
 
    oid = MkCookieId()
+   oa.ReNewSession(oid, hname, resp)
+
+/*
    oa.SetCookie(oid, hname, resp)
 
    state = MkCookieId()
@@ -352,4 +355,6 @@ func (oa *Oauth2T) NewSession(hname string, resp http.ResponseWriter) {
    resp.Header().Add("Location", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile+cpf+website+birthdate+gender+preferred_username+given_name+middle_name+locale+picture+zone_info+updated_at+nickname+name+family_name+address+phone_number_verified+phone_number")
 
    Goose.Auth.Logf(0,"3a1 oa=%#v", oa)
+*/
+
 }

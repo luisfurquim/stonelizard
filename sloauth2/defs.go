@@ -21,6 +21,10 @@ type Profiler interface{
    Avatar() string
 }
 
+type OptionsT struct {
+	Secure bool
+}
+
 
 type Oauth2T struct {
    CertKit          stonelizard.AuthT `json:"CertKit"`
@@ -34,6 +38,7 @@ type Oauth2T struct {
    UserProfileModel Profiler          `json:"-"`
    Session          map[string]map[string]interface{} `json:"-"`
    SavePending      func(cert *x509.Certificate, parms ...interface{}) error
+	Secure			  bool
 }
 
 type Oauth2G struct {

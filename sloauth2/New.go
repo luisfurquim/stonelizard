@@ -4,9 +4,20 @@ import (
    "golang.org/x/oauth2"
 )
 
-func New(cliId, cliSec, authURL, tokURL string) (*Oauth2T, error) {
+func New(cliId, cliSec, authURL, tokURL string, ...opt OptionsT) (*Oauth2T, error) {
    var oa Oauth2T
 //   var e  error
+	var secure bool
+	var o OptionsT
+	var ok bool
+
+	if len(opt) == 0 || opt[0] == nil {
+		secure = true
+	} else {
+		if o, ok = opt[0].(OptionsT); ok {
+			secure = o.Secure
+		}
+	}
 
    oa = Oauth2T{
       Config: &oauth2.Config{
@@ -21,6 +32,7 @@ func New(cliId, cliSec, authURL, tokURL string) (*Oauth2T, error) {
          },
       },
       Session: map[string]map[string]interface{}{},
+      Secure: secure,
    }
 
    return &oa, nil
