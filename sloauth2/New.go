@@ -4,7 +4,7 @@ import (
    "golang.org/x/oauth2"
 )
 
-func New(cliId, cliSec, authURL, tokURL string, ...opt OptionsT) (*Oauth2T, error) {
+func New(cliId, cliSec, authURL, tokURL string, opt ...OptionsT) (*Oauth2T, error) {
    var oa Oauth2T
 //   var e  error
 	var secure bool
