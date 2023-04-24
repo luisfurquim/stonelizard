@@ -11,12 +11,10 @@ func New(cliId, cliSec, authURL, tokURL string, opt ...OptionsT) (*Oauth2T, erro
 	var o OptionsT
 	var ok bool
 
-	if len(opt) == 0 || opt[0] == nil {
+	if len(opt) == 0 {
 		secure = true
 	} else {
-		if o, ok = opt[0].(OptionsT); ok {
-			secure = o.Secure
-		}
+		secure = o.Secure
 	}
 
    oa = Oauth2T{
