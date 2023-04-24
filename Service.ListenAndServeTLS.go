@@ -154,7 +154,8 @@ FindEncLoop:
             hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
             svc:svc,
             path:path,
-            })
+				exported: exported,
+			})
       }
 
       // Configure the server
