@@ -315,10 +315,14 @@ func (oa *Oauth2T) SetCookie(oid string, hname string, resp http.ResponseWriter)
       HttpOnly: true,
       MaxAge: 3600 * 24,
       Secure: oa.Secure,
-//      SameSite: http.SameSiteStrictMode,
-//      SameSite: http.SameSiteLaxMode,
-      SameSite: http.SameSiteNoneMode,
-   }
+	}
+
+	if oa.Secure {
+//      ck.SameSite = http.SameSiteStrictMode
+//      ck.SameSite = http.SameSiteLaxMode
+		ck.SameSite = http.SameSiteNoneMode
+	}
+	
    resp.Header().Add("Set-Cookie", ck.String())
 }
 
