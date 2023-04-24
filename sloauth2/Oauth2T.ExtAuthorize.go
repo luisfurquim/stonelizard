@@ -340,7 +340,7 @@ func (oa *Oauth2T) ReNewSession(oid string, hname string, resp http.ResponseWrit
 
 func (oa *Oauth2T) NewSession(hname string, resp http.ResponseWriter) {
    var oid string
-   var state string
+//   var state string
 
    oid = MkCookieId()
    oa.ReNewSession(oid, hname, resp)
