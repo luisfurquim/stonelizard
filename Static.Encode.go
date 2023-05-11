@@ -18,9 +18,9 @@ func (d *Static) Encode(v interface{}) error {
    var closer io.WriteCloser
 
    if src, ok = v.(io.Reader); ok {
-      Goose.Serve.Logf(3,"Using reader")
+      Goose.Serve.Logf(4,"Using reader")
       n, err = io.Copy(d.w, src)
-      Goose.Serve.Logf(3,"Written %d bytes", n)
+      Goose.Serve.Logf(4,"Written %d bytes", n)
    } else if ch, ok = v.(<-chan []byte); ok {
       Goose.Serve.Logf(3,"Using channel")
       for buf = range ch {
@@ -29,9 +29,9 @@ func (d *Static) Encode(v interface{}) error {
       }
       Goose.Serve.Logf(3,"Written %d bytes", sum)
    } else {
-      Goose.Serve.Logf(3,"Using printf")
+      Goose.Serve.Logf(4,"Using printf")
       m, err = fmt.Fprintf(d.w,"%s",v)
-      Goose.Serve.Logf(3,"Written %d bytes", m)
+      Goose.Serve.Logf(4,"Written %d bytes", m)
    }
 
    if closer, ok = v.(io.WriteCloser); ok {

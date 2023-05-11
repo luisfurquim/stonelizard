@@ -323,7 +323,7 @@ gzipcheck:
       return
    }
 
-   Goose.Serve.Logf(0,"check authinfo")
+//   Goose.Serve.Logf(0,"check authinfo")
    Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
    if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo && svc.Access != AccessInfo{
       authinfo = nil
