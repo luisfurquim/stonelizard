@@ -74,7 +74,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
 
 main:
    for in = range authReq {
-      Goose.Auth.Logf(0,"1")
+//      Goose.Auth.Logf(0,"1")
 //      path = in.Path
       parms = in.Parms
       resp = in.Resp
@@ -86,13 +86,13 @@ main:
          oa.Session = map[string]map[string]interface{}{}
       }
 
-      Goose.Auth.Logf(0,"2")
+//      Goose.Auth.Logf(0,"2")
 
       ck, err = req.Cookie("OID")
       if err != nil || ck.Value == "" {
-         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
+//         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
          oa.NewSession(hname, resp)
-         Goose.Auth.Logf(0,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
+//         Goose.Auth.Logf(0,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
          in.Out<- stonelizard.ExtAuthorizeOut{
             Stat: http.StatusFound,
             Data: nil,
@@ -103,11 +103,11 @@ main:
 
       oid = ck.Value
 
-      Goose.Auth.Logf(0,"4A oid=%s, session=%#v", oid, oa.Session)
+//      Goose.Auth.Logf(0,"4A oid=%s, session=%#v", oid, oa.Session)
 
       if _, ok = oa.Session[oid]; !ok {
          oa.ReNewSession(oid, hname, resp)
-         Goose.Auth.Logf(0,"4A1 oid=%s, session=%#v", oid, oa.Session)
+//         Goose.Auth.Logf(0,"4A1 oid=%s, session=%#v", oid, oa.Session)
          in.Out<- stonelizard.ExtAuthorizeOut{
             Stat: http.StatusFound,
             Data: nil,
@@ -116,7 +116,7 @@ main:
          continue
       }
 
-      Goose.Auth.Logf(0,"4B parms: %#v", parms)
+//      Goose.Auth.Logf(0,"4B parms: %#v", parms)
 
       if certIface, ok = oa.Session[oid]["cert"]; ok {
          if cert, ok = certIface.(*x509.Certificate); ok {
@@ -132,7 +132,7 @@ main:
       cliCode, ok = parms["code"].(string)
       if !ok || cliCode=="" {
          state = MkCookieId()
-         Goose.Auth.Logf(0,"Location: %s", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
+//         Goose.Auth.Logf(0,"Location: %s", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
          resp.Header().Add("Location", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
          oa.Session[oid]["state"] = state
          in.Out<- stonelizard.ExtAuthorizeOut{
@@ -143,7 +143,7 @@ main:
          continue
       }
 
-      Goose.Auth.Logf(0,"5")
+//      Goose.Auth.Logf(0,"5")
 
       // preventing CSRF
       state, ok = oa.Session[oid]["state"].(string)
@@ -151,7 +151,7 @@ main:
          state = ""
       }
 
-      Goose.Auth.Logf(0,"6")
+//      Goose.Auth.Logf(0,"6")
 
       cliState, ok = parms["state"].(string)
       if !ok || cliState=="" || (state!="" && cliState!=state) {
@@ -167,7 +167,7 @@ main:
          continue
       }
 
-      Goose.Auth.Logf(0,"7")
+//      Goose.Auth.Logf(0,"7")
 
 
    // claims_supported":["add","modify","delete","read","website","birthdate","gender","profile","preferred_username","given_name","middle_name","locale","picture","zone_info","updated_at","nickname","name","family_name","address","phone_number_verified","phone_number"]
@@ -188,7 +188,7 @@ main:
          continue
       }
 
-      Goose.Auth.Logf(0,"9")
+//      Goose.Auth.Logf(0,"9")
       oa.SetCookie(oid, hname, resp)
       oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
@@ -198,7 +198,7 @@ main:
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
-         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
+//         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
          in.Out<- stonelizard.ExtAuthorizeOut{
             Stat: 0,
             Data: nil,
@@ -223,12 +223,12 @@ main:
 //      err = json.NewDecoder(oaResp.Body).Decode(pf)
    //
 
-		Goose.Auth.Logf(0, "Email: --%s--", pf.Email())
+//		Goose.Auth.Logf(0, "Email: --%s--", pf.Email())
 
       email = strings.ToLower(pf.Email()) + "_"
-      Goose.Auth.Logf(0,"email: [%s]", email)
+//      Goose.Auth.Logf(0,"email: [%s]", email)
       trusted, err = oa.GetTrusted()
-      Goose.Auth.Logf(0,"trusted: [%#v]", trusted)
+//      Goose.Auth.Logf(0,"trusted: [%#v]", trusted)
       if err == nil {
          Goose.Auth.Logf(4,"find cert")
          for key, certdata = range trusted {
@@ -338,7 +338,7 @@ func (oa *Oauth2T) ReNewSession(oid string, hname string, resp http.ResponseWrit
    }
    resp.Header().Add("Location", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile+cpf+website+birthdate+gender+preferred_username+given_name+middle_name+locale+picture+zone_info+updated_at+nickname+name+family_name+address+phone_number_verified+phone_number")
 
-   Goose.Auth.Logf(0,"3a2 oa=%#v", oa)
+//   Goose.Auth.Logf(0,"3a2 oa=%#v", oa)
 }
 
 

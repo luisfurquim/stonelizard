@@ -104,7 +104,7 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	exported, err = filepath.Abs(fs.exported)
-	Goose.Serve.Logf(1,"exported: [%s], path: [%s], err:[%s]", exported, r.URL.Path[len(fs.path):], err)
+	Goose.Serve.Logf(4,"exported: [%s], path: [%s], err:[%s]", exported, r.URL.Path[len(fs.path):], err)
 
 	if err != nil {
 		Goose.Serve.Logf(1,"Error normalizing exported path %s: %s", exported, err)
