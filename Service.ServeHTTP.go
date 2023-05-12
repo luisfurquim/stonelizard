@@ -569,9 +569,9 @@ gzipcheck:
    } else if (endpoint.produces == "application/javascript") || (len(endpoint.produces)>=5 && endpoint.produces[:5] == "text/") {
       mrsh = NewStaticEncoder(outWriter)
       hd.Add("Content-Type",endpoint.produces + "; charset=utf-8")
-   } else if endpoint.produces == "application/octet-stream" {
+	} else if len(endpoint.produces)>=12 && endpoint.produces[:12] == "application/" {
       mrsh = NewStaticEncoder(outWriter)
-      hd.Add("Content-Type","application/octet-stream")
+      hd.Add("Content-Type", endpoint.produces)
    } else {
       parts = strings.Split(endpoint.produces,";")
       if parts[0] == "*" {
