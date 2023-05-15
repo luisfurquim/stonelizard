@@ -75,7 +75,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-   Goose.Serve.Logf(7,"Will check if swagger.json is requested: %#v",svc.Swagger)
+   Goose.Serve.Logf(0,"Will check if swagger.json is requested: %#v", svc.Swagger)
+   Goose.Serve.Logf(0,"svc.SwaggerPath: %s", svc.SwaggerPath)
    if r.URL.Path==(svc.SwaggerPath+"/swagger.json") {
       defer func() {
          if r := recover(); r != nil {
@@ -560,7 +561,7 @@ gzipcheck:
    }
 
    if endpoint.produces == "application/json" {
-      Goose.Serve.Logf(1,"Using json encoder")
+      Goose.Serve.Logf(4,"Using json encoder")
       mrsh = json.NewEncoder(outWriter)
       hd.Add("Content-Type","application/json")
    } else if endpoint.produces == "application/xml" {

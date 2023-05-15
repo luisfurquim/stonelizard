@@ -181,7 +181,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       Goose.OpHandle.Logf(8,"ins3: %d:%s",len(ins),ins)
 //Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
       if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo || accesstype == AccessInfo {
-         Goose.OpHandle.Logf(0,"Checking the need for appending authinfo")
+         Goose.OpHandle.Logf(4,"Checking the need for appending authinfo")
          if (len(ins)+1) == num || (len(ins)+3) == num {
             if reflect.ValueOf(authinfo).IsValid() {
 //               Goose.OpHandle.Logf(0,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())//7
