@@ -74,7 +74,6 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var num                      int
    var mod, out, outvar         string
    var extAuth                  ExtAuthT
-   var swpath                   string
    var tags                 [][]string
    var tag                    []string
    var propParm                *SwaggerParameterT
@@ -133,9 +132,9 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   svcProduces = fld.Tag.Get("produces")
                   allowGzip   = fld.Tag.Get("allowGzip")
                   enableCORS  = fld.Tag.Get("enableCORS")
-                  swpath      = fld.Tag.Get("swagger")
+                  resp.SwaggerPath      = fld.Tag.Get("swagger")
 
-                  if swpath == "root" {
+                  if resp.SwaggerPath == "root" {
                      resp.SwaggerPath = svcRoot
                   }
 
