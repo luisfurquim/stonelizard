@@ -123,16 +123,16 @@ func pushParms(parms []interface{}, obj reflect.Value, met reflect.Method) ([]re
       }
       Goose.OpHandle.Logf(5,"parmtype: %s",parmTypeName)
       parm = reflect.New(parmType)
-      Goose.OpHandle.Logf(3,"adding parm %s",buf)
+      Goose.OpHandle.Logf(4,"adding parm %s",buf)
       err = json.Unmarshal(buf,parm.Interface())
       if err != nil {
          Goose.OpHandle.Logf(1,"unmarshal error: %s",err)
          Goose.OpHandle.Logf(1,"Internal server error parsing [%s]: %s",buf,err)
-         Goose.OpHandle.Logf(1,"parms %#v",parms)
+         Goose.OpHandle.Logf(2,"parms %#v",parms)
          return nil, err
       }
 
-      Goose.OpHandle.Logf(3,"added parm %#v",reflect.Indirect(parm).Interface())
+      Goose.OpHandle.Logf(4,"added parm %#v",reflect.Indirect(parm).Interface())
 
       ins = append(ins,reflect.Indirect(parm))
       Goose.OpHandle.Logf(5,"ins: %d:%s",len(ins),ins)
