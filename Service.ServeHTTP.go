@@ -75,8 +75,8 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
       }
    }
 
-   Goose.Serve.Logf(0,"Will check if swagger.json is requested: %#v", svc.Swagger)
-   Goose.Serve.Logf(0,"svc.SwaggerPath: %s", svc.SwaggerPath)
+   Goose.Serve.Logf(5,"Will check if swagger.json is requested: %#v", svc.Swagger)
+   Goose.Serve.Logf(4,"svc.SwaggerPath: %s", svc.SwaggerPath)
    if r.URL.Path==(svc.SwaggerPath+"/swagger.json") {
       defer func() {
          if r := recover(); r != nil {
