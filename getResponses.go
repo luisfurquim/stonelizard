@@ -47,9 +47,9 @@ func getResponses(fld reflect.StructField, typ reflect.Type) (map[string]Swagger
          }
 
          if SwaggerParameter != nil && SwaggerParameter.Schema != nil {
-            Goose.New.Logf(2,"---------------> %#v",SwaggerParameter.Schema)
+            Goose.New.Logf(5,"---------------> %#v",SwaggerParameter.Schema)
             if SwaggerParameter.Type == "array" {
-               Goose.New.Logf(2,"---------------> %#v",SwaggerParameter.Schema.Items)
+               Goose.New.Logf(5,"---------------> %#v",SwaggerParameter.Schema.Items)
             }
          }
 
@@ -74,7 +74,7 @@ func getResponses(fld reflect.StructField, typ reflect.Type) (map[string]Swagger
                SwaggerParameter.Schema.Type = SwaggerParameter.Type
             }
 
-            Goose.New.Logf(2,"====== %#v",SwaggerParameter.Schema)
+            Goose.New.Logf(5,"====== %#v",SwaggerParameter.Schema)
 
             responses[fmt.Sprintf("%d",http.StatusOK)] = SwaggerResponseT{
                Description: responseOk,

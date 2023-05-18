@@ -191,10 +191,10 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
          }
 
          title = field.Tag.Get("title")
-         Goose.New.Logf(2,"Title: [%s=%s]", field.Name, title)
+         Goose.New.Logf(4,"Title: [%s=%s]", field.Name, title)
          if title != "" {
             item.Schema.Title = title
-            Goose.New.Logf(2,"Title found: [%s=%#v]", field.Name, item.Schema)
+            Goose.New.Logf(5,"Title found: [%s=%#v]", field.Name, item.Schema)
             continue
          }
 
@@ -271,8 +271,8 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
 
       }
 
-      Goose.Swagger.Logf(2,"Got final struct: %#v",item)//6
-      Goose.Swagger.Logf(2,"Got final struct: %#v",item.Schema)//6
+      Goose.Swagger.Logf(5,"Got final struct: %#v",item)//6
+      Goose.Swagger.Logf(6,"Got final struct: %#v",item.Schema)//6
       return item, nil
    }
 
