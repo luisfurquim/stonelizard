@@ -718,6 +718,6 @@ func New(svcs ...EndPointHandler) (*Service, error) {
       go extAuth.StartExtAuthorizer(resp.ch)
    }
 
-
+	Goose.New.Logf(1,"Stonelizard service started...")
    return resp, nil
 }
