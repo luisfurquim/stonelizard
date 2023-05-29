@@ -82,7 +82,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    Goose.New.Logf(6,"Initializing services: %#v", svcs)
 
    for _, svc = range svcs {
-      Goose.New.Logf(0,"-----------")
+//      Goose.New.Logf(0,"-----------")
 //      Goose.New.Logf(6,"Elem: %#v (Kind: %#v)", reflect.ValueOf(svc), reflect.ValueOf(svc).Kind())
 //      Goose.New.Logf(0,"-----------")
       if reflect.ValueOf(svc).Kind() == reflect.Ptr {
@@ -202,11 +202,11 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                }
             }
 
-            Goose.New.Logf(1,"Is %s a module?", fld.Name)
+            Goose.New.Logf(2,"Is %s a module?", fld.Name)
             if fld.Type == ModType {
-               Goose.New.Logf(1,"Module %s found", fld.Name)
+               Goose.New.Logf(2,"Module %s found", fld.Name)
                if swaggerInfo.XModules == nil {
-                  Goose.New.Logf(1,"Module %s Init", fld.Name)
+                  Goose.New.Logf(2,"Module %s Init", fld.Name)
                   swaggerInfo.XModules = map[string]map[string]*SwaggerSchemaT{}
                }
 
@@ -214,7 +214,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
                tags = tagRE.FindAllStringSubmatch(string(fld.Tag),-1)
                for _, tag = range tags {
-                  Goose.New.Logf(1,"Prop %s: %s", tag[1], tag[2])
+                  Goose.New.Logf(2,"Prop %s: %s", tag[1], tag[2])
                   propField, ok = typ.FieldByName(tag[2])
                   if !ok {
                      Goose.New.Logf(1,"Error: %s", ErrorUndefPropType)
@@ -323,7 +323,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   Goose.New.Logf(1,"Method not found: %s, Data: %#v",methodName,typ)
                   return nil, errors.New(fmt.Sprintf("Method not found: %s",methodName))
                } else {
-                  Goose.New.Logf(1,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
+                  Goose.New.Logf(2,"Pointer method found, type of svcElem: %s",reflect.TypeOf(svcElem))
                   callByRef = true
                   Goose.New.Logf(5,"Pointer method found: %s",methodName)
                }
@@ -360,7 +360,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
 //                     if (SwaggerParameter.Items != nil) || (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
                      if (SwaggerParameter.CollectionFormat!="") || (SwaggerParameter.Schema.Required != nil) {
-                        Goose.New.Logf(0,"%s on %s: %s",ErrorInvalidParameterType,methodName,tk[1:len(tk)-1])
+                        Goose.New.Logf(1,"%s on %s: %s",ErrorInvalidParameterType,methodName,tk[1:len(tk)-1])
                         return nil, ErrorInvalidParameterType
                      }
 
@@ -484,7 +484,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             Goose.New.Logf(5,"Registering: %s",re)
             consumes = fld.Tag.Get("consumes")
-            Goose.New.Logf(1,"op:%s consumes: %s tag:%#v",methodName,consumes,fld.Tag)
+            Goose.New.Logf(2,"op:%s consumes: %s tag:%#v",methodName,consumes,fld.Tag)
             if consumes == "" {
                consumes = svcConsumes
             }
@@ -565,7 +565,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             for _, prt := range proto {
                rePrtMethod := strings.ToUpper("^" + prt + "\\+" + httpmethod + ":/")
 
-               Goose.New.Logf(0,"Registering marshalers: %s, %s",consumes,produces)
+               Goose.New.Logf(2,"Registering marshalers: %s, %s",consumes,produces)
 
                resp.MatchedOps[MatchedOpsIndex] = len(resp.Svc)
 
