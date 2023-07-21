@@ -141,7 +141,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                httpResp.Body   = "Internal server error"
                httpResp.Header = map[string]string{}
 
-               Goose.OpHandle.Logf(0,"posttype[%d]: %#v",j,posttype[j].Interface())
+               Goose.OpHandle.Logf(0,"posttype[%d]: %#v",j,posttype[j])
                if postvalue.Kind() == reflect.Ptr && !postvalue.IsNil() {
                   Goose.OpHandle.Logf(0,"posttype: %#v",postvalue.Elem().Kind())
                   Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %#v",err,postvalue.Elem().Interface())
