@@ -129,11 +129,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
             postvalue = reflect.New(posttype[j])
             // Decode it from the HTTP body
             Goose.OpHandle.Logf(6,"postvalue.Interface(): %#v",postvalue.Interface())
-				if postvalue.Kind() == reflect.Ptr && !postvalue.IsNil() {
-					err = Unmarshal.Decode(postvalue.Elem().Interface())
-               } else {
-					err = Unmarshal.Decode(postvalue.Interface())
-				}
+				err = Unmarshal.Decode(postvalue.Interface())
             if err != nil && err != io.EOF {
 //Goose.OpHandle.Logf(0,"3")
                // Return HTTP error
