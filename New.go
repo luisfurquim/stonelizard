@@ -246,7 +246,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
          hostport := strings.Split(resp.Config.ListenAddress(),":")
          if hostport[0] == "" {
-            if resp.Authorizer == nil {
+//				Goose.New.Logf(0,"Stonelizard hostport %s", hostport[0])
+            if resp.Authorizer == nil || isPlain(svcProto) {
                hostport[0] = "0.0.0.0"
             } else {
                authdns := resp.Authorizer.GetDNSNames()
@@ -721,3 +722,19 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 	Goose.New.Logf(1,"Stonelizard service started...")
    return resp, nil
 }
+
+func isPlain(proto []string) bool {
+	var p string
+
+//	Goose.New.Logf(0,"Stonelizard isPlain %#v", proto)
+	
+	for _, p = range proto {
+		if p=="https" || p=="wss" {
+//			Goose.New.Logf(0,"Stonelizard isPlain -------> %#v", proto)
+			return false
+		}
+	}
+
+	return true
+}
+
