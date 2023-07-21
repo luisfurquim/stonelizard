@@ -129,7 +129,11 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
             postvalue = reflect.New(posttype[j])
             // Decode it from the HTTP body
             Goose.OpHandle.Logf(6,"postvalue.Interface(): %#v",postvalue.Interface())
-            err = Unmarshal.Decode(postvalue.Interface())
+				if postvalue.Kind() == reflect.Ptr && !postvalue.IsNil() {
+					err = Unmarshal.Decode(postvalue.Elem().Interface())
+               } else {
+					err = Unmarshal.Decode(postvalue.Interface())
+				}
             if err != nil && err != io.EOF {
 //Goose.OpHandle.Logf(0,"3")
                // Return HTTP error
@@ -137,7 +141,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
                httpResp.Body   = "Internal server error"
                httpResp.Header = map[string]string{}
 
-               Goose.OpHandle.Logf(0,"posttype[%d]: %#v",j,posttype[j])
+               Goose.OpHandle.Logf(0,"posttype[%d]: %#v",j,posttype[j].Interface())
                if postvalue.Kind() == reflect.Ptr && !postvalue.IsNil() {
                   Goose.OpHandle.Logf(0,"posttype: %#v",postvalue.Elem().Kind())
                   Goose.OpHandle.Logf(1,"Internal server error parsing post body: %s - postvalue: %#v",err,postvalue.Elem().Interface())
