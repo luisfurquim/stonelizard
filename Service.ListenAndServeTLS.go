@@ -109,7 +109,7 @@ FindEncLoop:
             if path[len(path)-1] != '/' {
                path += "/"
             }
-            Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
+            Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s (%s)", path, exported, exportedAbs)
             mux.Handle(path,FileServerHandlerT{
 //               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
                hnd:http.FileServer(http.Dir(exportedAbs)),
