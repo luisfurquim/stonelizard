@@ -105,7 +105,7 @@ FindEncLoop:
             Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
             mux.Handle(path,FileServerHandlerT{
 //               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
-               hnd:http.FileServer(http.Dir(exported)),
+               hnd:http.FileServer(http.Dir(filepath.Abs(exported))),
                svc:svc,
                path:path,
                exported: exported,
