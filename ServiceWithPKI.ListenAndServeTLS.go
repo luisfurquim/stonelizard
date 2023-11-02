@@ -6,6 +6,7 @@ import (
    "sync"
    "net/http"
    "crypto/tls"
+   "path/filepath"
 //   "github.com/kr/pretty"
 )
 
@@ -115,7 +116,7 @@ FindEncLoop:
             mux.Handle(path,FileServerHandlerT{
 //               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
                hnd:http.FileServer(http.Dir(exportedAbs)),
-               svc:svc,
+               svc:&svc.Service,
                path:path,
                exported: exported,
             })
