@@ -19,7 +19,7 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    r.Header.Del("X-Request-Signer-Certificate")
    r.Header.Del("X-Request-Signer-Type")
 
-   if r.URL.Path != (svc.SwaggerPath+"/swagger.json") {
+   if r.URL.Path != (svc.SwaggerPath+"/swagger.json") && r.Method != "OPTIONS" {
       Goose.InitServe.Logf(0,"wrapped")
 
       signature, err = base64.StdEncoding.DecodeString(r.Header.Get("X-Request-Signature"))
