@@ -128,7 +128,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //Access-Control-Allow-Methods: POST, GET, OPTIONS
 //Access-Control-Allow-Headers: X-PINGOTHER
 //Access-Control-Allow-Origin: *
-      hd.Add("Access-Control-Allow-Headers", strings.Join(append(endpoint.Headers,"Content-Type","X-Request-Signer"),", "))
+      hd.Add("Access-Control-Allow-Headers", strings.Join(append(endpoint.Headers,"Content-Type","X-Request-Signer","X-Request-Signature"),", "))
       w.WriteHeader(http.StatusOK)
       w.Write([]byte("OK"))
       return
