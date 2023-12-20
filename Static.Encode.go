@@ -31,7 +31,11 @@ func (d *Static) Encode(v interface{}) error {
    } else {
       Goose.Serve.Logf(4,"Using printf")
       m, err = fmt.Fprintf(d.w,"%s",v)
-      Goose.Serve.Logf(4,"Written %d bytes", m)
+      if err != nil {
+			Goose.Serve.Logf(1,"Error writing %d bytes: %s", m, err)
+		} else {
+			Goose.Serve.Logf(4,"Written %d bytes", m)
+		}
    }
 
    if closer, ok = v.(io.WriteCloser); ok {
