@@ -3,6 +3,8 @@ package stonelizard
 import (
    "io"
    "fmt"
+   "bytes"
+   "strings"
 )
 
 
