@@ -15,6 +15,9 @@ func (d *Static) Encode(v interface{}) error {
    var n int64
    var m int
    var sum int
+   var s string
+   var sp *string
+   var bufp *[]byte
    var closer io.WriteCloser
 
    if src, ok = v.(io.Reader); ok {
@@ -30,13 +33,24 @@ func (d *Static) Encode(v interface{}) error {
       Goose.Serve.Logf(3,"Written %d bytes", sum)
    } else {
       Goose.Serve.Logf(4,"Using printf")
-      m, err = fmt.Fprintf(d.w,"%s",v)
-      if err != nil {
-			Goose.Serve.Logf(1,"Error writing %d bytes: %s", m, err)
+      if s, ok = v.(string) ; ok {
+			src = strings.NewReader(s)
+		} else if buf, ok = v.([]byte) ; ok {
+			src = bytes.NewReader(buf)
+		} else if sp, ok = v.(*string) ; ok {
+			src = strings.NewReader(*sp)
+		} else if bufp, ok = v.(*[]byte) ; ok {
+			src = bytes.NewReader(*bufp)
 		} else {
-			Goose.Serve.Logf(4,"Written %d bytes", m)
+			src = strings.NewReader(fmt.Sprintf("%s",v))
 		}
+      n, err = io.Copy(d.w, src)
+		Goose.Serve.Logf(4,"Written %d bytes", m)
    }
+
+	if err != nil {
+		Goose.Serve.Logf(1,"Error writing body: %s", err)
+	}
 
    if closer, ok = v.(io.WriteCloser); ok {
       closer.Close()
