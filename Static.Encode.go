@@ -30,7 +30,6 @@ func (d *Static) Encode(v interface{}) error {
       Goose.Serve.Logf(3,"Written %d bytes", sum)
    } else {
       Goose.Serve.Logf(4,"Using printf")
-      Goose.Serve.Logf(0,"data:%s",v)
       m, err = fmt.Fprintf(d.w,"%s",v)
       if err != nil {
 			Goose.Serve.Logf(1,"Error writing %d bytes: %s", m, err)
