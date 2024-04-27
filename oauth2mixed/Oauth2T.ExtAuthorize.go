@@ -83,22 +83,32 @@ main:
       req = in.Req
 //      SavePending = in.SavePending
 
+		Goose.Auth.Logf(0,"1")
+
 		ctx = context.Background()
 		if oa.Session == nil {
 			oa.Session = map[string]map[string]interface{}{}
 		}
 
+		Goose.Auth.Logf(0,"1a")
+
 		parm, ok = parms["Authorization"]
 		if ok {
+			Goose.Auth.Logf(0,"1b")
 			sparm, ok = parm.(string)
 			if ok {
+				Goose.Auth.Logf(0,"1c")
 				if ok = strings.HasPrefix(sparm, "Bearer "); ok {
+					Goose.Auth.Logf(0,"1d")
 					sparm = sparm[7:]
 				}
 			}
 		}
 
+		Goose.Auth.Logf(0,"1e")
+
 		if ok {
+			Goose.Auth.Logf(0,"1f")
 			tok = &oauth2.Token{AccessToken: sparm}
 			oid = "__APP__"
 
@@ -108,7 +118,7 @@ main:
 			}
 		} else {
 
-	//      Goose.Auth.Logf(0,"2")
+	      Goose.Auth.Logf(0,"2")
 			ck, err = req.Cookie("OID")
 			if err != nil || ck.Value == "" {
 	//         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
