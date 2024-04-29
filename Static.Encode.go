@@ -53,7 +53,7 @@ func (d *Static) Encode(v interface{}) error {
 		Goose.Serve.Logf(1,"Error writing body: %s", err)
 	}
 
-   if closer, ok = d.w.(io.WriteCloser); ok {
+   if closer, ok = v.(io.WriteCloser); ok {
       closer.Close()
    }
 
