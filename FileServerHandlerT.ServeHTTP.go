@@ -134,5 +134,6 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	Goose.Serve.Logf(4,"Calling handler")
    fs.hnd.ServeHTTP(w,r)
 }
