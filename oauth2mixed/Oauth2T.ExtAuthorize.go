@@ -67,6 +67,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
    var sparm string
    var resp http.ResponseWriter
    var req *http.Request
+   var httpsStat int
 //   var SavePending func(interface{}) error
 
    var hname string
@@ -237,10 +238,11 @@ main:
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
-			Goose.Auth.Logf(0,"oaResp: %#v", *oaResp)
+			Goose.Auth.Logf(0,"oaResp: %#v [%s]", *oaResp, err)
 //         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
+			fmt.Sscanf(oaResp.Status, "%d", &httpsStat)
          in.Out<- stonelizard.ExtAuthorizeOut{
-            Stat: oaResp.Status,
+            Stat: httpsStat,
             Data: nil,
             Err: ErrorUnauthorized,
          }
