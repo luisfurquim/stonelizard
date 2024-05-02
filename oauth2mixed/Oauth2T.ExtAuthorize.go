@@ -233,11 +233,14 @@ main:
       rq.Header.Add("Authorization", `Bearer ` + tok.AccessToken)
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
+		Goose.Auth.Logf(0,"oaResp: %#v", oaResp)
+
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
+			Goose.Auth.Logf(0,"oaResp: %#v", *oaResp)
 //         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
          in.Out<- stonelizard.ExtAuthorizeOut{
-            Stat: 0,
+            Stat: oaResp.Status,
             Data: nil,
             Err: ErrorUnauthorized,
          }
