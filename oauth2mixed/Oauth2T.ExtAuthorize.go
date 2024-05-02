@@ -116,6 +116,11 @@ main:
 			if err != nil || ck.Value == "" {
 				oa.NewSession(hname, resp)
 			}
+
+			if oa.Session[oid] == nil {
+				oa.Session[oid] = map[string]interface{}{}
+			}
+			
 		} else {
 
 	      Goose.Auth.Logf(0,"2")
