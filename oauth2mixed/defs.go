@@ -27,18 +27,19 @@ type OptionsT struct {
 
 
 type Oauth2T struct {
-   CertKit          stonelizard.AuthT `json:"CertKit"`
-   RegEndPoint      string            `json:"RegEndPoint"`
-   TokInfEndPoint   string            `json:"TokInfEndPoint"`
-   UsrInfEndPoint   string            `json:"UsrInfEndPoint"`
-   OIDMetaEndPoint  string            `json:"OIDMetaEndPoint"`
-   RevokeEndPoint   string            `json:"RevokeEndPoint"`
-   JSONWKSEndPoint  string            `json:"JSONWKSEndPoint"`
-   Config          *oauth2.Config     `json:"Config"`
-   UserProfileModel Profiler          `json:"-"`
-   Session          map[string]map[string]interface{} `json:"-"`
-   SavePending      func(cert *x509.Certificate, parms ...interface{}) error
-	Secure			  bool
+   CertKit            stonelizard.AuthT `json:"CertKit"`
+   RegEndPoint        string            `json:"RegEndPoint"`
+   TokInfEndPoint     string            `json:"TokInfEndPoint"`
+   UsrInfEndPoint     string            `json:"UsrInfEndPoint"`
+   OIDMetaEndPoint    string            `json:"OIDMetaEndPoint"`
+   RevokeEndPoint     string            `json:"RevokeEndPoint"`
+   IntrospectEndPoint string            `json:"IntrospectEndPoint"`
+   JSONWKSEndPoint    string            `json:"JSONWKSEndPoint"`
+   Config            *oauth2.Config     `json:"Config"`
+   UserProfileModel   Profiler          `json:"-"`
+   Session            map[string]map[string]interface{} `json:"-"`
+   SavePending        func(cert *x509.Certificate, parms ...interface{}) error
+	Secure			    bool
 }
 
 type Oauth2G struct {

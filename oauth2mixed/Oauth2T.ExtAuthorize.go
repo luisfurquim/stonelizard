@@ -45,6 +45,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
    var state string
    var cliState string
    var ok bool
+   var InstrospectFlow bool
    var cliCode string
    var tok *oauth2.Token
    var ctx context.Context
@@ -94,13 +95,13 @@ main:
 
 		Goose.Auth.Logf(0,"1a")
 
-		parm, ok = parms["Authorization"]
-		if ok {
+		parm, InstrospectFlow = parms["Authorization"]
+		if InstrospectFlow {
 			Goose.Auth.Logf(0,"1b")
-			sparm, ok = parm.(string)
-			if ok {
+			sparm, InstrospectFlow = parm.(string)
+			if InstrospectFlow {
 				Goose.Auth.Logf(0,"1c")
-				if ok = strings.HasPrefix(sparm, "Bearer "); ok {
+				if InstrospectFlow = strings.HasPrefix(sparm, "Bearer "); ok {
 					Goose.Auth.Logf(0,"1d")
 					sparm = sparm[7:]
 				}
@@ -109,7 +110,7 @@ main:
 
 		Goose.Auth.Logf(0,"1e")
 
-		if ok {
+		if InstrospectFlow {
 			Goose.Auth.Logf(0,"1f")
 			tok = &oauth2.Token{AccessToken: sparm}
 			oid = "__APP__"
@@ -231,8 +232,14 @@ main:
 		oa.SetCookie(oid, hname, resp)
 		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
-      rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
-      rq.Header.Add("Authorization", `Bearer ` + tok.AccessToken)
+		if InstrospectFlow {
+			// token_type_hint": {"access_token"}
+			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(`token=`+tok.AccessToken))
+		} else {
+			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
+		}
+
+		rq.Header.Add("Authorization", `Bearer ` + tok.AccessToken)
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
 		Goose.Auth.Logf(0,"request: %#v", rq)
