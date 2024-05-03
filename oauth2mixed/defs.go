@@ -42,6 +42,13 @@ type Oauth2T struct {
 	Secure			    bool
 }
 
+type BearerT struct {
+	AccessToken string `json:"access_token"`
+	TokenType string `json:"token_type"`
+	ExpiresIn int `json:"expires_in"`
+	Scope string `json:"scope"`
+}
+
 type Oauth2G struct {
    Auth      goose.Alert `json:"Auth"`
 }
@@ -50,6 +57,12 @@ var Goose  Oauth2G
 
 var ErrorUnauthorized      = errors.New("Unauthorized access attempt")
 var ErrorDuplicateFile     = errors.New("Error duplicate file")
+
+
+var ErrCreateHttpToken error = errors.New("Error creating token http request")
+var ErrFetchingHttpToken error = errors.New("Error fetching token")
+var ErrParsingToken error = errors.New("Erro parsing token")
+
 
 var ckidchars []byte = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
 

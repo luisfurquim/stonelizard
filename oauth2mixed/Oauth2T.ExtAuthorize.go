@@ -71,7 +71,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
    var req *http.Request
    var httpsStat int
 //   var SavePending func(interface{}) error
-
+	var bearer BearerT
    var hname string
 
    hname, _ = os.Hostname()
@@ -233,13 +233,48 @@ main:
 		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
 		if InstrospectFlow {
-			// token_type_hint": {"access_token"}
-			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(`token=`+tok.AccessToken))
+			// token_type_hint": {"access_token"}IntrospectEndPoint
+			rq, err = http.NewRequest("POST", strings.Split(oa.Config.Endpoint.TokenURL,"?")[0], bytes.NewReader([]byte(
+				`client_id=` + oa.Config.ClientID +
+				`&client_secret=` + oa.Config.ClientSecret +
+				`&grant_type=client_credentials&scope=` + strings.Join(oa.Config.Scopes,","))))
+			if err != nil {
+				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
+				return
+			}
+			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
+
+			fmt.Printf("--------------- TS 4\n")
+
+			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
+			if err != nil {
+				fmt.Printf("%s:%s\n", ErrFetchingHttpToken, err)
+				return
+			}
+			defer oaResp.Body.Close()
+
+			fmt.Printf("--------------- TS 5\n")
+
+			err = json.NewDecoder(oaResp.Body).Decode(&bearer)
+			if err != nil {
+				fmt.Printf("%s:%s\n", ErrParsingToken, err)
+				return
+			}
+
+
+			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, bytes.NewReader([]byte(
+				`token=` + tok.AccessToken)))
+			if err != nil {
+				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
+				return
+			}
+			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
+
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
 		}
 
-		rq.Header.Add("Authorization", `Bearer ` + tok.AccessToken)
+		rq.Header.Add("Authorization", `Bearer ` + bearer.AccessToken)
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
 		Goose.Auth.Logf(0,"request: %#v", rq)
