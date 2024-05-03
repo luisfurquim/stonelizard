@@ -240,7 +240,7 @@ main:
 				`&grant_type=client_credentials&scope=` + strings.Join(oa.Config.Scopes,","))))
 			if err != nil {
 				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
-				return
+				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 
@@ -248,8 +248,8 @@ main:
 
 			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 			if err != nil {
-				fmt.Printf("%s:%s\n", ErrFetchingHttpToken, err)
-				return
+				Goose.Auth.Logf(1,"%s:%s\n", ErrFetchingHttpToken, err)
+				continue
 			}
 			defer oaResp.Body.Close()
 
@@ -257,16 +257,18 @@ main:
 
 			err = json.NewDecoder(oaResp.Body).Decode(&bearer)
 			if err != nil {
-				fmt.Printf("%s:%s\n", ErrParsingToken, err)
-				return
+				Goose.Auth.Logf(1,"%s:%s\n", ErrParsingToken, err)
+				continue
 			}
+
+			Goose.Auth.Logf(0,"%#v\n", bearer)
 
 
 			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, bytes.NewReader([]byte(
 				`token=` + tok.AccessToken)))
 			if err != nil {
-				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
-				return
+				Goose.Auth.Logf(1,"%s:%s\n", ErrCreateHttpToken, err)
+				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 
