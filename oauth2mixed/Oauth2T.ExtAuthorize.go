@@ -244,7 +244,7 @@ main:
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 
-			fmt.Printf("--------------- TS 4\n")
+			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
 			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 			if err != nil {
@@ -253,7 +253,7 @@ main:
 			}
 			defer oaResp.Body.Close()
 
-			fmt.Printf("--------------- TS 5\n")
+			Goose.Auth.Logf(1,"--------------- TS 5\n")
 
 			err = json.NewDecoder(oaResp.Body).Decode(&bearer)
 			if err != nil {
