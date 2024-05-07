@@ -246,6 +246,10 @@ main:
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 
+			Goose.Auth.Logf(1,"--------------- TS 3 body:%s\n", `client_id=` + oa.Config.ClientID +
+				`&client_secret=` + oa.Config.ClientSecret +
+				`&grant_type=client_credentials&scope=` + strings.Join(oa.Config.Scopes,","))
+
 			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
 			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
