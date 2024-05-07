@@ -7,6 +7,7 @@ import (
    "bytes"
    "strings"
    "context"
+   "net/url"
    "net/http"
    "crypto/x509"
 //   "io/ioutil"
@@ -73,6 +74,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
 //   var SavePending func(interface{}) error
 	var bearer BearerT
    var hname string
+   var body string
 
    hname, _ = os.Hostname()
 
@@ -261,10 +263,12 @@ main:
 				continue
 			}
 
-			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
-			Goose.Auth.Logf(0,"token: %#v\n", `token=` + tok.AccessToken[7:])
+			body = `token=` + url.QueryEscape(tok.AccessToken[7:])
 
-			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, bytes.NewReader([]byte(`token=` + tok.AccessToken[7:])))
+			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
+			Goose.Auth.Logf(0,"token: %#v\n", body)
+
+			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(body))
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s\n", ErrCreateHttpToken, err)
 				continue
