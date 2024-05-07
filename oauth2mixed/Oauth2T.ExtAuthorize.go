@@ -261,11 +261,10 @@ main:
 				continue
 			}
 
-			Goose.Auth.Logf(0,"%#v\n", bearer)
+			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
+			Goose.Auth.Logf(0,"token: %#v\n", `token=` + tok.AccessToken)
 
-
-			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, bytes.NewReader([]byte(
-				`token=` + tok.AccessToken)))
+			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, bytes.NewReader([]byte(`token=` + tok.AccessToken)))
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s\n", ErrCreateHttpToken, err)
 				continue
