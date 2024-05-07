@@ -263,7 +263,7 @@ main:
 				continue
 			}
 
-			body = `token=` + url.QueryEscape(tok.AccessToken[7:])
+			body = `token=` + url.PathEscape(tok.AccessToken[7:])
 
 			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
 			Goose.Auth.Logf(0,"token: %#v\n", body)
@@ -283,6 +283,7 @@ main:
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
 		Goose.Auth.Logf(0,"request: %#v", rq)
+		Goose.Auth.Logf(0,"request url: %s", rq.URL)
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
