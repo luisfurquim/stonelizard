@@ -268,13 +268,15 @@ main:
 				continue
 			}
 
-			body = `token=` + url.PathEscape(tok.AccessToken[7:])
+//			body = `token=` + url.PathEscape(tok.AccessToken[7:])
+			body = `token=` + url.PathEscape(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."))
+			strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],".")
 
 			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
 			Goose.Auth.Logf(0,"token: %#v\n", body)
 
 
-
+/*
 			token, err := jwt.Parse(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."), func(token *jwt.Token) (interface{}, error) {
 				// Don't forget to validate the alg is what you expect:
 //				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -293,7 +295,7 @@ main:
 			} else {
 				Goose.Auth.Logf(0,"Error getting claims: %s", err)
 			}
-
+*/
 
 			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(body))
 			if err != nil {
