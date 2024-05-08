@@ -312,6 +312,11 @@ main:
 			rq.Header.Add("Content-Length", fmt.Sprintf("%d",len(body)))
 //			io.Copy(os.Stdout, rq.Body)
 
+
+	os.Setenv("HTTP_PROXY", "http://192.168.3.6:8080")
+	os.Setenv("HTTPS_PROXY", "http://192.168.3.6:8080")
+
+
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
 		}
