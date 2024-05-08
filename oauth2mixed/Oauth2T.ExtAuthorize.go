@@ -15,6 +15,7 @@ import (
    "encoding/json"
    "crypto/x509/pkix"
    "golang.org/x/oauth2"
+   "github.com/golang-jwt/jwt/v5"
    "github.com/luisfurquim/stonelizard"
    "github.com/luisfurquim/stonelizard/certkit"
    "github.com/luisfurquim/stonelizard/certkitetcd"
@@ -271,6 +272,28 @@ main:
 
 			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
 			Goose.Auth.Logf(0,"token: %#v\n", body)
+
+
+
+			token, err := jwt.Parse(tok.AccessToken[7:], func(token *jwt.Token) (interface{}, error) {
+				// Don't forget to validate the alg is what you expect:
+//				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+//					return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+//				}
+
+				// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
+				return oa.Config.ClientSecret, nil
+			})
+			if err != nil {
+				Goose.Auth.Fatalf("Error decoding token: %s", err)
+			}
+
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				Goose.Auth.Logf(0,"%s: %s", claims["foo"], claims["nbf"])
+			} else {
+				Goose.Auth.Logf(0,"Error getting claims: %s", err)
+			}
+
 
 			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(body))
 			if err != nil {
