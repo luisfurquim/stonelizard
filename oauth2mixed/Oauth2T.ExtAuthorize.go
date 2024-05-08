@@ -313,7 +313,7 @@ main:
 //			io.Copy(os.Stdout, rq.Body)
 
 
-			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
+			proxyUrl, _ := url.Parse("https://192.168.3.6:8080")
 			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 
 		} else {
@@ -328,7 +328,8 @@ main:
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
-			Goose.Auth.Logf(0,"oaResp: %#v [%s]", *oaResp, err)
+			Goose.Auth.Logf(0,"oaResp: [%s]", err)
+			Goose.Auth.Logf(0,"oaResp: %#v", *oaResp)
 //         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
 			fmt.Sscanf(oaResp.Status, "%d", &httpsStat)
          in.Out<- stonelizard.ExtAuthorizeOut{
