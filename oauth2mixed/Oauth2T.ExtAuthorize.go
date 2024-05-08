@@ -273,11 +273,11 @@ main:
 				continue
 			}
 
-			bearer.AccessToken = strings.Join(strings.Split(bearer.AccessToken,".")[:3],".")
+//			bearer.AccessToken = strings.Join(strings.Split(bearer.AccessToken,".")[:3],".")
 
-//			body = `token=` + url.PathEscape(tok.AccessToken[7:])
-			body = `token=` + url.PathEscape(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."))
-			strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],".")
+			body = `token=` + url.PathEscape(tok.AccessToken[7:])
+//			body = `token=` + url.PathEscape(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."))
+//			strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],".")
 
 			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
 			Goose.Auth.Logf(0,"token: %#v\n", body)
