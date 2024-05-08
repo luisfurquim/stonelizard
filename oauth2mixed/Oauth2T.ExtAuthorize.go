@@ -79,9 +79,6 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
 
    hname, _ = os.Hostname()
 
-	os.Setenv("HTTP_PROXY", "http://192.168.3.6:8080")
-	os.Setenv("HTTPS_PROXY", "http://192.168.3.6:8080")
-
 main:
    for in = range authReq {
 //      Goose.Auth.Logf(0,"1")
