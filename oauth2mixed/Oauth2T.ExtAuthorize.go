@@ -313,9 +313,8 @@ main:
 //			io.Copy(os.Stdout, rq.Body)
 
 
-	os.Setenv("HTTP_PROXY", "http://192.168.3.6:8080")
-	os.Setenv("HTTPS_PROXY", "http://192.168.3.6:8080")
-
+			proxyUrl, err := url.Parse("http://192.168.3.6:8080")
+			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
