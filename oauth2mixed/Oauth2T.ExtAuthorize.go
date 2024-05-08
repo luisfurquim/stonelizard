@@ -310,6 +310,7 @@ main:
 				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
+			io.Copy(os.Stdout, rq.Body)
 
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
