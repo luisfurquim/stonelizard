@@ -285,7 +285,7 @@ main:
 				return oa.Config.ClientSecret, nil
 			})
 			if err != nil {
-				Goose.Auth.Fatalf("Error decoding token: %s", err)
+				Goose.Auth.Fatalf(1, "Error decoding token: %s", err)
 			}
 
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
