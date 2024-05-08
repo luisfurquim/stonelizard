@@ -313,7 +313,7 @@ main:
 //			io.Copy(os.Stdout, rq.Body)
 
 
-			proxyUrl, _ := url.Parse("https://192.168.3.6:8080")
+			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
 			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{Proxy: http.ProxyURL(proxyUrl)}
 
 		} else {
