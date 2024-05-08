@@ -15,7 +15,7 @@ import (
    "encoding/json"
    "crypto/x509/pkix"
    "golang.org/x/oauth2"
-   "github.com/golang-jwt/jwt/v5"
+//   "github.com/golang-jwt/jwt/v5"
    "github.com/luisfurquim/stonelizard"
    "github.com/luisfurquim/stonelizard/certkit"
    "github.com/luisfurquim/stonelizard/certkitetcd"
