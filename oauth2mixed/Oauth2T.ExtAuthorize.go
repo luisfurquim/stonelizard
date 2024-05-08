@@ -79,6 +79,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
 
    hname, _ = os.Hostname()
 
+	os.Setenv("HTTP_PROXY", "http://127.0.0.1:8080")
 
 main:
    for in = range authReq {
