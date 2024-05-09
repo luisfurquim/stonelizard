@@ -324,13 +324,13 @@ main:
 
 			time.Sleep(3 * time.Second)
 
-/*
+
 			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
 			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{
 				Proxy: http.ProxyURL(proxyUrl),
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, 
 			}
-*/
+
 
 
 		} else {
