@@ -4,6 +4,7 @@ import (
    "os"
    "io"
    "fmt"
+   "time"
    "bytes"
    "strings"
    "context"
@@ -317,6 +318,8 @@ main:
 			rq.Header.Del("Accept-Encoding")
 			rq.Header.Del("User-Agent")
 			rq.Header.Add("User-Agent", "curl/7.71.1")
+
+			time.Sleep(3 * time.Second)
 
 /*
 			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
