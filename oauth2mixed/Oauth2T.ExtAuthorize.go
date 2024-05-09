@@ -315,6 +315,8 @@ main:
 
 			rq.Header.Add("Accept", "*/*")
 			rq.Header.Del("Accept-Encoding")
+			rq.Header.Del("User-Agent")
+			rq.Header.Add("User-Agent", "curl/7.71.1")
 
 /*
 			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
