@@ -136,9 +136,9 @@ main:
 	      Goose.Auth.Logf(0,"2")
 			ck, err = req.Cookie("OID")
 			if err != nil || ck.Value == "" {
-	//         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
+	         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
 				oa.NewSession(hname, resp)
-	//         Goose.Auth.Logf(0,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
+	         Goose.Auth.Logf(0,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
 				in.Out<- stonelizard.ExtAuthorizeOut{
 					Stat: http.StatusFound,
 					Data: nil,
@@ -149,11 +149,11 @@ main:
 
 			oid = ck.Value
 
-	//      Goose.Auth.Logf(0,"4A oid=%s, session=%#v", oid, oa.Session)
+	      Goose.Auth.Logf(0,"4A oid=%s, session=%#v", oid, oa.Session)
 
 			if _, ok = oa.Session[oid]; !ok {
 				oa.ReNewSession(oid, hname, resp)
-	//         Goose.Auth.Logf(0,"4A1 oid=%s, session=%#v", oid, oa.Session)
+	         Goose.Auth.Logf(0,"4A1 oid=%s, session=%#v", oid, oa.Session)
 				in.Out<- stonelizard.ExtAuthorizeOut{
 					Stat: http.StatusFound,
 					Data: nil,
@@ -162,7 +162,7 @@ main:
 				continue
 			}
 
-	//      Goose.Auth.Logf(0,"4B parms: %#v", parms)
+	      Goose.Auth.Logf(0,"4B parms: %#v", parms)
 
 			if certIface, ok = oa.Session[oid]["cert"]; ok {
 				if cert, ok = certIface.(*x509.Certificate); ok {
@@ -178,7 +178,7 @@ main:
 			cliCode, ok = parms["code"].(string)
 			if !ok || cliCode=="" {
 				state = MkCookieId()
-	//         Goose.Auth.Logf(0,"Location: %s", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
+	         Goose.Auth.Logf(0,"Location: %s", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
 				resp.Header().Add("Location", oa.Config.AuthCodeURL(state, oauth2.AccessTypeOffline) + "&scope=profile")
 				oa.Session[oid]["state"] = state
 				in.Out<- stonelizard.ExtAuthorizeOut{
@@ -189,7 +189,7 @@ main:
 				continue
 			}
 
-	//      Goose.Auth.Logf(0,"5")
+	      Goose.Auth.Logf(0,"5")
 
 			// preventing CSRF
 			state, ok = oa.Session[oid]["state"].(string)
@@ -197,7 +197,7 @@ main:
 				state = ""
 			}
 
-	//      Goose.Auth.Logf(0,"6")
+      Goose.Auth.Logf(0,"6")
 
 			cliState, ok = parms["state"].(string)
 			if !ok || cliState=="" || (state!="" && cliState!=state) {
@@ -213,7 +213,7 @@ main:
 				continue
 			}
 
-	//      Goose.Auth.Logf(0,"7")
+	      Goose.Auth.Logf(0,"7")
 
 
 		// claims_supported":["add","modify","delete","read","website","birthdate","gender","profile","preferred_username","given_name","middle_name","locale","picture","zone_info","updated_at","nickname","name","family_name","address","phone_number_verified","phone_number"]
@@ -235,7 +235,7 @@ main:
 			}
 		}
 
-//      Goose.Auth.Logf(0,"9")
+      Goose.Auth.Logf(0,"9")
 		oa.SetCookie(oid, hname, resp)
 //		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
@@ -330,6 +330,7 @@ main:
 			rq.Header.Add("User-Agent", "curl/7.71.1")
 
 		} else {
+			Goose.Auth.Logf(0,"user access: %#v", oa.Session[oid])
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
 			oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 		}
@@ -363,8 +364,10 @@ main:
 			err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
 			if err == nil {
 				if InstrospectFlow {
+					Goose.Auth.Logf(0,"InstrospectFlow")
 					pf = ClientCredentialsProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
 				} else {
+					Goose.Auth.Logf(0,"user access flow")
 					pf = MinimalProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
 				}
 			}
@@ -383,7 +386,7 @@ main:
       trusted, err = oa.GetTrusted()
 //      Goose.Auth.Logf(0,"trusted: [%#v]", trusted)
       if err == nil {
-         Goose.Auth.Logf(4,"find cert")
+         Goose.Auth.Logf(4,"find cert for: %s", email)
          for key, certdata = range trusted {
             Goose.Auth.Logf(4,"cert-key: %s -- %s", key, email)
             if strings.HasPrefix(strings.ToLower(key), email) {
