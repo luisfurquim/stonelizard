@@ -4,7 +4,6 @@ import (
    "os"
    "io"
    "fmt"
-   "time"
    "bytes"
    "strings"
    "context"
@@ -320,7 +319,6 @@ main:
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 			rq.Header.Add("Content-Length", fmt.Sprintf("%d",len(body)))
-//			io.Copy(os.Stdout, rq.Body)
 
 			introUrl, _ := url.Parse(oa.IntrospectEndPoint)
 
@@ -330,17 +328,6 @@ main:
 			rq.Header.Add("Accept-Encoding","*")
 			rq.Header.Del("User-Agent")
 			rq.Header.Add("User-Agent", "curl/7.71.1")
-
-			time.Sleep(3 * time.Second)
-
-/*
-			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
-			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{
-				Proxy: http.ProxyURL(proxyUrl),
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, 
-			}
-*/
-
 
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
@@ -375,7 +362,11 @@ main:
 		if oa.UserProfileModel == nil {
 			err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
 			if err == nil {
-				pf = MinimalProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
+				if InstrospectFlow {
+					pf = ClientCredentialsProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
+				} else {
+					pf = MinimalProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
+				}
 			}
 		} else {
 			pf = oa.UserProfileModel.New()
