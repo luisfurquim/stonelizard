@@ -175,6 +175,8 @@ main:
 				}
 			}
 
+			Goose.Auth.Logf(0,"4C")
+
 			cliCode, ok = parms["code"].(string)
 			if !ok || cliCode=="" {
 				state = MkCookieId()
