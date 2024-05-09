@@ -313,12 +313,17 @@ main:
 			rq.Header.Add("Content-Length", fmt.Sprintf("%d",len(body)))
 //			io.Copy(os.Stdout, rq.Body)
 
+			rq.Header.Add("Accept", "*/*")
+			rq.Header.Del("Accept-Encoding")
 
+/*
 			proxyUrl, _ := url.Parse("http://192.168.3.6:8080")
 			oa.Session[oid]["client"].(*http.Client).Transport = &http.Transport{
 				Proxy: http.ProxyURL(proxyUrl),
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, 
 			}
+*/
+
 
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
