@@ -276,7 +276,7 @@ main:
 
 //			bearer.AccessToken = strings.Join(strings.Split(bearer.AccessToken,".")[:3],".")
 
-			body = `token=` + tok.AccessToken[7:]
+			body = `token=` + tok.AccessToken[7:] + "\r\n"
 //			body = `token=` + url.PathEscape(tok.AccessToken[7:])
 //			body = `token=` + url.PathEscape(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."))
 //			strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],".")
