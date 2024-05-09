@@ -118,8 +118,8 @@ main:
 			Goose.Auth.Logf(0,"1f")
 			tok = &oauth2.Token{
 				AccessToken: sparm,
-				TokenType: "client_credentials",
-//				TokenType: "bearer",
+//				TokenType: "client_credentials",
+				TokenType: "bearer",
 			}
 			oid = "__APP__"
 
@@ -238,9 +238,11 @@ main:
 
 //      Goose.Auth.Logf(0,"9")
 		oa.SetCookie(oid, hname, resp)
-		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
+//		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
 		if InstrospectFlow {
+			oa.Session[oid]["client"] = &http.Client{}
+			
 			// token_type_hint": {"access_token"}IntrospectEndPoint
 			rq, err = http.NewRequest("POST", strings.Split(oa.Config.Endpoint.TokenURL,"?")[0], bytes.NewReader([]byte(
 				`grant_type=client_credentials` +
@@ -342,6 +344,7 @@ main:
 
 		} else {
 			rq, err = http.NewRequest("GET", oa.UsrInfEndPoint, nil)
+			oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 		}
 
 		rq.Header.Add("Authorization", `Bearer ` + bearer.AccessToken)
