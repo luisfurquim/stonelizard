@@ -118,7 +118,8 @@ main:
 			Goose.Auth.Logf(0,"1f")
 			tok = &oauth2.Token{
 				AccessToken: sparm,
-				TokenType: "bearer",
+				TokenType: "client_credentials",
+//				TokenType: "bearer",
 			}
 			oid = "__APP__"
 
