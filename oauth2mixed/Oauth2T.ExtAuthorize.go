@@ -167,7 +167,7 @@ main:
 			if certIface, ok = oa.Session[oid]["cert"]; ok {
 				Goose.Auth.Logf(0,"4b1")
 				if cert, ok = certIface.(*x509.Certificate); ok {
-					Goose.Auth.Logf(0,"4b2")
+					Goose.Auth.Logf(0,"4b2: %#v", cert)
 					in.Out<- stonelizard.ExtAuthorizeOut{
 						Stat: 0,
 						Data: cert,
