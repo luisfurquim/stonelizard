@@ -370,6 +370,8 @@ main:
       buf := new(bytes.Buffer)
       io.Copy(buf, oaResp.Body)
 
+		Goose.Auth.Logf(0,"successful response: %s", buf)
+
 		if oa.UserProfileModel == nil {
 			err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
 			if err == nil {
