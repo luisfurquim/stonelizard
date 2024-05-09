@@ -319,6 +319,7 @@ main:
 			rq.Header.Add("Host", strings.Split(introUrl.Host,":")[0])
 			rq.Header.Add("Accept", "*/*")
 			rq.Header.Del("Accept-Encoding")
+			rq.Header.Add("Accept-Encoding","*")
 			rq.Header.Del("User-Agent")
 			rq.Header.Add("User-Agent", "curl/7.71.1")
 
