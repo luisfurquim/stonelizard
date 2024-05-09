@@ -314,6 +314,9 @@ main:
 			rq.Header.Add("Content-Length", fmt.Sprintf("%d",len(body)))
 //			io.Copy(os.Stdout, rq.Body)
 
+			introUrl, _ := url.Parse(oa.IntrospectEndPoint)
+
+			rq.Header.Add("Host", strings.Split(introUrl.Host,":")[0])
 			rq.Header.Add("Accept", "*/*")
 			rq.Header.Del("Accept-Encoding")
 			rq.Header.Del("User-Agent")
