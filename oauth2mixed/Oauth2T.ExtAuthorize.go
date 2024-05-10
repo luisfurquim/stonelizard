@@ -282,7 +282,7 @@ main:
 
 			io.Copy(&respBuf, oaResp.Body)
 
-			err = json.NewDecoder(respBuf).Decode(&bearer)
+			err = json.NewDecoder(&respBuf).Decode(&bearer)
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s -> %s", ErrParsingToken, err, respBuf.Bytes()) // print msg
 				continue
