@@ -77,6 +77,7 @@ func (oa *Oauth2T) StartExtAuthorizer(authReq chan stonelizard.ExtAuthorizeIn) {
 	var bearer BearerT
    var hname string
    var body string
+   var respBuf bytes.Buffer
 
    hname, _ = os.Hostname()
 
@@ -266,7 +267,7 @@ main:
 				`grant_type=client_credentials` +
 				`&client_id=` + oa.Config.ClientID +
 				`&client_secret=` + oa.Config.ClientSecret +
-				`&scope=` + strings.Join(oa.Config.Scopes,"+"))
+				`&scope=` + strings.Join(oa.Config.Scopes,"+")) // multiplos scopes
 
 			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
@@ -279,9 +280,11 @@ main:
 
 			Goose.Auth.Logf(1,"--------------- TS 5\n")
 
-			err = json.NewDecoder(oaResp.Body).Decode(&bearer)
+			io.Copy(&respBuf, oaResp.Body)
+
+			err = json.NewDecoder(respBuf).Decode(&bearer)
 			if err != nil {
-				Goose.Auth.Logf(1,"%s:%s\n", ErrParsingToken, err)
+				Goose.Auth.Logf(1,"%s:%s -> %s", ErrParsingToken, err, respBuf.Bytes()) // print msg
 				continue
 			}
 
