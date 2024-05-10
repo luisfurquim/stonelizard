@@ -267,7 +267,7 @@ main:
 				`grant_type=client_credentials` +
 				`&client_id=` + oa.Config.ClientID +
 				`&client_secret=` + oa.Config.ClientSecret +
-				`&scope=` + strings.Join(oa.Config.Scopes,"+")) // multiplos scopes
+				`&scope=` + strings.Join(oa.Config.Scopes,"+")) // multiple scopes
 
 			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
@@ -282,9 +282,11 @@ main:
 
 			io.Copy(&respBuf, oaResp.Body)
 
+			Goose.Auth.Logf(1,"Response body -> %s", respBuf.Bytes())
+
 			err = json.NewDecoder(&respBuf).Decode(&bearer)
 			if err != nil {
-				Goose.Auth.Logf(1,"%s:%s -> %s", ErrParsingToken, err, respBuf.Bytes()) // print msg
+				Goose.Auth.Logf(1,"%s:%s", ErrParsingToken, err)
 				continue
 			}
 
