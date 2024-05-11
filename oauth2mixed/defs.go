@@ -39,7 +39,8 @@ type Oauth2T struct {
    UserProfileModel   Profiler          `json:"-"`
    Session            map[string]map[string]interface{} `json:"-"`
    SavePending        func(cert *x509.Certificate, parms ...interface{}) error
-	Secure			    bool
+	Secure			    bool              `json:"secure"`
+	ClientCredScope  []string            `json:"client_credentials_scope"`
 }
 
 type BearerT struct {
@@ -61,7 +62,7 @@ var ErrorDuplicateFile     = errors.New("Error duplicate file")
 
 var ErrCreateHttpToken error = errors.New("Error creating token http request")
 var ErrFetchingHttpToken error = errors.New("Error fetching token")
-var ErrParsingToken error = errors.New("Erro parsing token")
+var ErrParsingToken error = errors.New("Error parsing token")
 
 
 var ckidchars []byte = []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")

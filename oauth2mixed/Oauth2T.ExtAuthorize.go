@@ -256,7 +256,7 @@ main:
 				`grant_type=client_credentials` +
 				`&client_id=` + oa.Config.ClientID +
 				`&client_secret=` + oa.Config.ClientSecret +
-				`&scope=` + strings.Join(oa.Config.Scopes,"+"))))
+				`&scope=` + strings.Join(oa.ClientCredScope,"+"))))
 			if err != nil {
 				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
 				continue
@@ -267,7 +267,7 @@ main:
 				`grant_type=client_credentials` +
 				`&client_id=` + oa.Config.ClientID +
 				`&client_secret=` + oa.Config.ClientSecret +
-				`&scope=` + strings.Join(oa.Config.Scopes,"+")) // multiple scopes
+				`&scope=` + strings.Join(oa.ClientCredScope,"+"))
 
 			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
