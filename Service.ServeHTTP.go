@@ -174,7 +174,14 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			optional = false
 		}
 
-		header = strings.ToUpper(header[:1]) + header[1:]
+		header = strings.ToUpper(header)
+
+		for hdrKey, _ := range r.Header {
+			if strings.ToUpper(hdrKey) == header {
+				header = hdrKey
+				break
+			}
+		}
 		
       if _, ok = r.Header[header]; !ok {
 //      if (r.Header[header]==nil) || (len(r.Header[header])==0) {
