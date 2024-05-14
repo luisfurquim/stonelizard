@@ -4,6 +4,7 @@ import (
    "io"
    "fmt"
    "sync"
+   "bytes"
    "runtime"
    "strings"
    "reflect"
@@ -209,6 +210,12 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    Goose.Serve.Logf(6,"authparms with headers: %#v",authparms)
 
    Goose.Serve.Logf(5,"checking marshalers: cons:%s, prod:%s",endpoint.consumes,endpoint.produces)
+
+   dbg := &bytes.Buffer{}
+   io.Copy(dbg, r.Body)
+   Goose.Serve.Logf(0,"Body: %s", dbg.Bytes())
+
+   r.Body = io.NopCloser(dbg)
 
    if endpoint.consumes == "application/json" {
       umrsh = json.NewDecoder(r.Body)
