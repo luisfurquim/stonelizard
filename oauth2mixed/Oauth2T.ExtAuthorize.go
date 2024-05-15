@@ -394,6 +394,17 @@ main:
 
       email = strings.ToLower(pf.Email()) + "_"
 //      Goose.Auth.Logf(0,"email: [%s]", email)
+
+      if len(email) == 0 {
+			Goose.Auth.Logf(1,"Empty client email identification!")
+         in.Out<- stonelizard.ExtAuthorizeOut{
+            Stat: http.StatusNotFound,
+            Data: nil,
+            Err: ErrorUnauthorized,
+         }
+         continue
+      }
+
       trusted, err = oa.GetTrusted()
 //      Goose.Auth.Logf(0,"trusted: [%#v]", trusted)
       if err == nil {
