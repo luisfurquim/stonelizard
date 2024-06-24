@@ -90,32 +90,32 @@ main:
       req = in.Req
 //      SavePending = in.SavePending
 
-		Goose.Auth.Logf(0,"1")
+		Goose.Auth.Logf(5,"1")
 
 		ctx = context.Background()
 		if oa.Session == nil {
 			oa.Session = map[string]map[string]interface{}{}
 		}
 
-		Goose.Auth.Logf(0,"1a")
+		Goose.Auth.Logf(5,"1a")
 
 		parm, InstrospectFlow = parms["Authorization"]
 		if InstrospectFlow {
-			Goose.Auth.Logf(0,"1b")
+			Goose.Auth.Logf(5,"1b")
 			sparm, InstrospectFlow = parm.(string)
 			if InstrospectFlow {
-				Goose.Auth.Logf(0,"1c")
+				Goose.Auth.Logf(5,"1c")
 				if InstrospectFlow = strings.HasPrefix(sparm, "Bearer "); ok {
-					Goose.Auth.Logf(0,"1d")
+					Goose.Auth.Logf(5,"1d")
 					sparm = sparm[7:]
 				}
 			}
 		}
 
-		Goose.Auth.Logf(0,"1e")
+		Goose.Auth.Logf(5,"1e")
 
 		if InstrospectFlow {
-			Goose.Auth.Logf(0,"1f")
+			Goose.Auth.Logf(5,"1f")
 			tok = &oauth2.Token{
 				AccessToken: sparm,
 //				TokenType: "client_credentials",
@@ -134,12 +134,12 @@ main:
 			
 		} else {
 
-	      Goose.Auth.Logf(0,"2")
+	      Goose.Auth.Logf(5,"2")
 			ck, err = req.Cookie("OID")
 			if err != nil || ck.Value == "" {
-	         Goose.Auth.Logf(0,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
+	         Goose.Auth.Logf(5,"2A ck=%#v, err=%s, oa=%#v", ck, err, oa)
 				oa.NewSession(hname, resp)
-	         Goose.Auth.Logf(0,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
+	         Goose.Auth.Logf(5,"2A1 ck=%#v, err=%s, oa=%#v", ck, err, oa)
 				in.Out<- stonelizard.ExtAuthorizeOut{
 					Stat: http.StatusFound,
 					Data: nil,
@@ -150,11 +150,11 @@ main:
 
 			oid = ck.Value
 
-	      Goose.Auth.Logf(0,"4A oid=%s, session=%#v", oid, oa.Session)
+	      Goose.Auth.Logf(5,"4A oid=%s, session=%#v", oid, oa.Session)
 
 			if _, ok = oa.Session[oid]; !ok {
 				oa.ReNewSession(oid, hname, resp)
-	         Goose.Auth.Logf(0,"4A1 oid=%s, session=%#v", oid, oa.Session)
+	         Goose.Auth.Logf(5,"4A1 oid=%s, session=%#v", oid, oa.Session)
 				in.Out<- stonelizard.ExtAuthorizeOut{
 					Stat: http.StatusFound,
 					Data: nil,
@@ -163,16 +163,16 @@ main:
 				continue
 			}
 
-	      Goose.Auth.Logf(0,"4B parms: %#v", parms)
+	      Goose.Auth.Logf(5,"4B parms: %#v", parms)
 
 			if certIface, ok = oa.Session[oid]["cert"]; ok {
-				Goose.Auth.Logf(0,"4b1")
+				Goose.Auth.Logf(5,"4b1")
 				if cert, ok = certIface.(*x509.Certificate); ok {
-					Goose.Auth.Logf(0,"4b2: cert.Issuer %#v", cert.Issuer)
-					Goose.Auth.Logf(0,"4b2: cert.Subject %#v", cert.Subject)
-					Goose.Auth.Logf(0,"4b2: cert.DNSNames %#v", cert.DNSNames)
-					Goose.Auth.Logf(0,"4b2: cert.EmailAddresses %#v", cert.EmailAddresses)
-					Goose.Auth.Logf(0,"4b2: cert.IPAddresses %#v", cert.IPAddresses)
+					Goose.Auth.Logf(5,"4b2: cert.Issuer %#v", cert.Issuer)
+					Goose.Auth.Logf(5,"4b2: cert.Subject %#v", cert.Subject)
+					Goose.Auth.Logf(5,"4b2: cert.DNSNames %#v", cert.DNSNames)
+					Goose.Auth.Logf(5,"4b2: cert.EmailAddresses %#v", cert.EmailAddresses)
+					Goose.Auth.Logf(5,"4b2: cert.IPAddresses %#v", cert.IPAddresses)
 					in.Out<- stonelizard.ExtAuthorizeOut{
 						Stat: 0,
 						Data: cert,
@@ -182,7 +182,7 @@ main:
 				}
 			}
 
-			Goose.Auth.Logf(0,"4C")
+			Goose.Auth.Logf(5,"4C")
 
 			cliCode, ok = parms["code"].(string)
 			if !ok || cliCode=="" {
@@ -198,7 +198,7 @@ main:
 				continue
 			}
 
-	      Goose.Auth.Logf(0,"5")
+	      Goose.Auth.Logf(5,"5")
 
 			// preventing CSRF
 			state, ok = oa.Session[oid]["state"].(string)
@@ -206,7 +206,7 @@ main:
 				state = ""
 			}
 
-      Goose.Auth.Logf(0,"6")
+      Goose.Auth.Logf(5,"6")
 
 			cliState, ok = parms["state"].(string)
 			if !ok || cliState=="" || (state!="" && cliState!=state) {
@@ -244,7 +244,7 @@ main:
 			}
 		}
 
-      Goose.Auth.Logf(0,"9")
+      Goose.Auth.Logf(5,"9")
 		oa.SetCookie(oid, hname, resp)
 //		oa.Session[oid]["client"] = oa.Config.Client(ctx, tok)
 
@@ -258,18 +258,20 @@ main:
 				`&client_secret=` + oa.Config.ClientSecret +
 				`&scope=` + strings.Join(oa.ClientCredScope,"+"))))
 			if err != nil {
-				fmt.Printf("%s:%s\n", ErrCreateHttpToken, err)
+				Goose.Auth.Logf(1, "%s:%s\n", ErrCreateHttpToken, err)
 				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
 
-			Goose.Auth.Logf(1,"--------------- TS 3 body:%s\n",
+/*
+			Goose.Auth.Logf(,"--------------- TS 3 body:%s\n",
 				`grant_type=client_credentials` +
 				`&client_id=` + oa.Config.ClientID +
 				`&client_secret=` + oa.Config.ClientSecret +
 				`&scope=` + strings.Join(oa.ClientCredScope,"+"))
+*/
 
-			Goose.Auth.Logf(1,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
+			Goose.Auth.Logf(5,"--------------- TS 4 scopes: %#v\n", oa.Config.Scopes)
 
 			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 			if err != nil {
@@ -278,11 +280,11 @@ main:
 			}
 			defer oaResp.Body.Close()
 
-			Goose.Auth.Logf(1,"--------------- TS 5\n")
+			Goose.Auth.Logf(5,"--------------- TS 5\n")
 
 			io.Copy(&respBuf, oaResp.Body)
 
-			Goose.Auth.Logf(1,"Response body -> %s", respBuf.Bytes())
+//			Goose.Auth.Logf(1,"Response body -> %s", respBuf.Bytes())
 
 			err = json.NewDecoder(&respBuf).Decode(&bearer)
 			if err != nil {
@@ -298,8 +300,8 @@ main:
 //			body = `token=` + url.PathEscape(strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],"."))
 //			strings.Join(strings.Split(tok.AccessToken[7:],".")[:3],".")
 
-			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
-			Goose.Auth.Logf(0,"token: %#v\n", body)
+//			Goose.Auth.Logf(0,"bearer: %#v\n", bearer)
+//			Goose.Auth.Logf(0,"token: %#v\n", body)
 
 
 /*
@@ -349,13 +351,13 @@ main:
 		rq.Header.Add("Authorization", `Bearer ` + bearer.AccessToken)
       oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 
-		Goose.Auth.Logf(0,"request: %#v", rq)
-		Goose.Auth.Logf(0,"request url: %s", rq.URL)
+//		Goose.Auth.Logf(0,"request: %#v", rq)
+		Goose.Auth.Logf(5,"request url: %s", rq.URL)
 
    //   oaResp, err = oa.Session[oid]["client"].(*http.Client).Get(oa.UsrInfEndPoint)
       if err != nil || oaResp.Status[0] != '2' {
-			Goose.Auth.Logf(0,"oaResp: [%s]", err)
-			Goose.Auth.Logf(0,"oaResp: %#v", *oaResp)
+			Goose.Auth.Logf(5,"oaResp: [%s]", err)
+//			Goose.Auth.Logf(0,"oaResp: %#v", *oaResp)
 //         Goose.Auth.Logf(0,"Error contacting user information endpoint: %s", err)
 			fmt.Sscanf(oaResp.Status, "%d", &httpsStat)
          in.Out<- stonelizard.ExtAuthorizeOut{
@@ -369,16 +371,16 @@ main:
       buf := new(bytes.Buffer)
       io.Copy(buf, oaResp.Body)
 
-		Goose.Auth.Logf(0,"successful response: %s", buf)
+//		Goose.Auth.Logf(0,"successful response: %s", buf)
 
 		if oa.UserProfileModel == nil {
 			err = json.Unmarshal(buf.Bytes(), &msgMapTemplate)
 			if err == nil {
 				if InstrospectFlow {
-					Goose.Auth.Logf(0,"InstrospectFlow")
+					Goose.Auth.Logf(5,"InstrospectFlow")
 					pf = ClientCredentialsProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
 				} else {
-					Goose.Auth.Logf(0,"user access flow")
+					Goose.Auth.Logf(5,"user access flow")
 					pf = MinimalProfiler{}.Init(msgMapTemplate.(map[string]interface{}))
 				}
 			}
