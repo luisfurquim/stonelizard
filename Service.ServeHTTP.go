@@ -213,7 +213,7 @@ func (svc *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
    dbg := &bytes.Buffer{}
    io.Copy(dbg, r.Body)
-   Goose.Serve.Logf(0,"Body: %s", dbg.Bytes())
+//   Goose.Serve.Logf(0,"Body: %s", dbg.Bytes())
 
    r.Body = io.NopCloser(dbg)
 
