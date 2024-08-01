@@ -259,6 +259,11 @@ main:
 				`&scope=` + strings.Join(oa.ClientCredScope,"+"))))
 			if err != nil {
 				Goose.Auth.Logf(1, "%s:%s\n", ErrCreateHttpToken, err)
+				in.Out<- stonelizard.ExtAuthorizeOut{
+					Stat: http.StatusUnauthorized,
+					Data: nil,
+					Err: ErrorUnauthorized,
+				}
 				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
@@ -276,6 +281,11 @@ main:
 			oaResp, err = oa.Session[oid]["client"].(*http.Client).Do(rq)
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s\n", ErrFetchingHttpToken, err)
+				in.Out<- stonelizard.ExtAuthorizeOut{
+					Stat: http.StatusUnauthorized,
+					Data: nil,
+					Err: ErrorUnauthorized,
+				}
 				continue
 			}
 			defer oaResp.Body.Close()
@@ -289,6 +299,11 @@ main:
 			err = json.NewDecoder(&respBuf).Decode(&bearer)
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s", ErrParsingToken, err)
+				in.Out<- stonelizard.ExtAuthorizeOut{
+					Stat: http.StatusUnauthorized,
+					Data: nil,
+					Err: ErrorUnauthorized,
+				}
 				continue
 			}
 
@@ -328,6 +343,11 @@ main:
 			rq, err = http.NewRequest("POST", oa.IntrospectEndPoint, strings.NewReader(body))
 			if err != nil {
 				Goose.Auth.Logf(1,"%s:%s\n", ErrCreateHttpToken, err)
+				in.Out<- stonelizard.ExtAuthorizeOut{
+					Stat: http.StatusUnauthorized,
+					Data: nil,
+					Err: ErrorUnauthorized,
+				}
 				continue
 			}
 			rq.Header.Add("Content-Type", `application/x-www-form-urlencoded`)
