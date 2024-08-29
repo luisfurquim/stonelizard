@@ -229,8 +229,8 @@ type Service struct {
    Access             uint8
    Authorizer         AuthT
    SavePending        func(interface{}) error
-   PlainStatic     map[string]string
-   SecureStatic    map[string]string
+   PlainStatic     map[string]StaticSvc
+   SecureStatic    map[string]StaticSvc
    ch            chan ExtAuthorizeIn
    SwaggerPath        string
 }
