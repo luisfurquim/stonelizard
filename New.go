@@ -725,13 +725,13 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                if p == "https" {
                   resp.SecureStatic[static] = StaticSvc{
 							exported: exported,
-							access uint8
+							access: access,
 						}
 
                } else if p == "http" {
                   resp.PlainStatic[static] = StaticSvc{
 							exported: exported,
-							access uint8
+							access: access,
 						}
                }
             }
