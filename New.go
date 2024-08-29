@@ -78,6 +78,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
    var tag                    []string
    var propParm                *SwaggerParameterT
    var propField                reflect.StructField
+   var access 						  uint8
 
    Goose.New.Logf(6,"Initializing services: %#v", svcs)
 
@@ -670,6 +671,31 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                continue
             }
 
+
+
+				if fld.Tag.Get("access") != "" {
+					switch strings.ToLower(strings.Trim(fld.Tag.Get("access")," ")) {
+						case "none":
+							access = AccessNone
+						case "auth":
+							access = AccessAuth
+						case "authinfo":
+							access = AccessAuthInfo
+						case "verifyauth":
+							access = AccessVerifyAuth
+						case "verifyauthinfo":
+							access = AccessVerifyAuthInfo
+						case "info":
+							access = AccessInfo
+					}
+					Goose.New.Logf(3,"Custom access type for static %s: %d", static, access)
+				} else {
+					access = resp.Access
+					Goose.New.Logf(3,"Default access type for static %s: %d", static, resp.Access)
+				}
+
+
+
             Goose.New.Logf(2,"Checking %s for static handlers has defined method", fld.Name)
             this = reflect.ValueOf(svc)
             if this.Kind() == reflect.Ptr {
@@ -697,9 +723,16 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             for _, p := range proto {
                if p == "https" {
-                  resp.SecureStatic[static] = exported
+                  resp.SecureStatic[static] = StaticSvc{
+							exported: exported,
+							access uint8
+						}
+
                } else if p == "http" {
-                  resp.PlainStatic[static] = exported
+                  resp.PlainStatic[static] = StaticSvc{
+							exported: exported,
+							access uint8
+						}
                }
             }
          }

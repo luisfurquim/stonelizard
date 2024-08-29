@@ -209,6 +209,11 @@ type Shaper interface {
    CertKit()            AuthT
 }
 
+type StaticSvc struct {
+	exported string
+	access uint8
+}
+
 type Service struct {
    Matcher           *regexp.Regexp
    MatchedOps map[int]int
@@ -273,6 +278,7 @@ type FileServerHandlerT struct {
    svc *Service
    path string
    exported string
+   access uint8
 }
 
 type PublicAccessT struct {}

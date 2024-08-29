@@ -24,7 +24,7 @@ func (svc *Service) ListenAndServeTLS() error {
    var tc      *tls.Config
    var mux     *http.ServeMux
    var path     string
-   var exported string
+   var exported StaticSvc
 
    // If the host/IP was not provided, get the hostname as provided by operating system
    if svc.Config.ListenAddress()[0] == ':' {
@@ -120,7 +120,8 @@ FindEncLoop:
 					hnd:http.FileServer(SLFileSystem{Dir: http.Dir(exportedAbs)}),
 					svc:svc,
 					path:path,
-					exported: exported,
+					exported: exported.exported,
+					access: exported.access,
 				})
          }
 

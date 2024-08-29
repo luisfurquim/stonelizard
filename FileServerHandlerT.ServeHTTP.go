@@ -63,7 +63,7 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 
    Goose.Serve.Logf(2,"svc.Access: %s from %s with level %d", r.RequestURI,  r.RemoteAddr, fs.svc.Access)
-   if fs.svc.Access != AccessNone && fs.svc.Access != AccessInfo {
+   if fs.access != AccessNone && fs.access != AccessInfo {
 
       r.ParseForm()
       authparms =  map[string]interface{}{}
