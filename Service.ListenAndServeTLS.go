@@ -100,7 +100,7 @@ FindEncLoop:
          mux.Handle("/",svc)
 
          for path, exported = range svc.SecureStatic {
-				exportedAbs, err := filepath.Abs(exported)
+				exportedAbs, err := filepath.Abs(exported.exported)
 				if err != nil {
 					Goose.InitServe.Logf(1,"Failed getting absolute exported path for %s: %s", exported, err)
 					return
@@ -165,10 +165,11 @@ FindEncLoop:
          }
          Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
          mux.Handle(path,FileServerHandlerT{
-            hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
+            hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported.exported))),
             svc:svc,
             path:path,
-				exported: exported,
+				exported: exported.exported,
+				access: exported.access,
 			})
       }
 

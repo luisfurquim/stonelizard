@@ -24,7 +24,7 @@ func (svc *ServiceWithPKI) ListenAndServeTLS() error {
    var tc      *tls.Config
    var mux     *http.ServeMux
    var path     string
-   var exported string
+   var exported StaticSvc
 
    // If the host/IP was not provided, get the hostname as provided by operating system
    if svc.Config.ListenAddress()[0] == ':' {
@@ -103,7 +103,7 @@ FindEncLoop:
          mux.Handle("/",svc)
 
          for path, exported = range svc.SecureStatic {
-				exportedAbs, err := filepath.Abs(exported)
+				exportedAbs, err := filepath.Abs(exported.exported)
 				if err != nil {
 					Goose.InitServe.Logf(1,"Failed getting absolute exported path for %s: %s", exported, err)
 					return
@@ -118,7 +118,8 @@ FindEncLoop:
 //               hnd:http.FileServer(http.Dir(exported)),
                svc:&svc.Service,
                path:path,
-               exported: exported,
+               exported: exported.exported,
+               access: exported.access,
             })
          }
 
@@ -160,12 +161,14 @@ FindEncLoop:
          if path[len(path)-1] != '/' {
             path += "/"
          }
-         Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported)
+         Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s", path, exported.exported)
          mux.Handle(path,FileServerHandlerT{
-            hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported))),
+            hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported.exported))),
             svc:&svc.Service,
             path:path,
-            })
+				exported: exported.exported,
+				access: exported.access,
+         })
       }
 
       // Configure the server

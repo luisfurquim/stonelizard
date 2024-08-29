@@ -105,8 +105,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             continue // If we still don't have a config defined and the endpoint handler has no config defined it WILL BE IGNORED!!!
          }
 
-         resp.SecureStatic = map[string]string{}
-         resp.PlainStatic = map[string]string{}
+         resp.SecureStatic = map[string]StaticSvc{}
+         resp.PlainStatic = map[string]StaticSvc{}
       }
 
       typ = reflect.ValueOf(svcElem).Type()
