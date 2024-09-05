@@ -276,9 +276,9 @@ gzipcheck:
       }
    }
 
-   Goose.Serve.Logf(5,"svc.Access level: %d",svc.Access)
+   Goose.Serve.Logf(5,"svc.Access level: %d",endpoint.access)
    err = nil
-   if svc.Access != AccessNone && svc.Access != AccessInfo {
+   if endpoint.access != AccessNone && endpoint.access != AccessInfo {
 
       defer func() {
          // Tries to survive to any panic from the application.
@@ -340,9 +340,9 @@ gzipcheck:
 
 //   Goose.Serve.Logf(0,"check authinfo")
    Goose.Serve.Logf(5,"Authorization returned HTTP status %d",httpstat)
-   if svc.Access != AccessAuthInfo && svc.Access != AccessVerifyAuthInfo && svc.Access != AccessInfo{
+   if endpoint.access != AccessAuthInfo && endpoint.access != AccessVerifyAuthInfo && endpoint.access != AccessInfo{
       authinfo = nil
-   } else if svc.Access == AccessInfo {
+   } else if endpoint.access == AccessInfo {
       certBuf := r.Header.Get("X-Request-Signer-Certificate")
       if len(certBuf) > 0 {
          cert, err := base64.StdEncoding.DecodeString(certBuf)

@@ -332,6 +332,28 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
             path   = fld.Tag.Get("path")
 
+            if fld.Tag.Get("access") != "" {
+					switch strings.ToLower(strings.Trim(fld.Tag.Get("access")," ")) {
+						case "none":
+							access = AccessNone
+						case "auth":
+							access = AccessAuth
+						case "authinfo":
+							access = AccessAuthInfo
+						case "verifyauth":
+							access = AccessVerifyAuth
+						case "verifyauthinfo":
+							access = AccessVerifyAuthInfo
+						case "info":
+							access = AccessInfo
+					}
+					Goose.New.Logf(3,"Custom access type %s: %d", static, access)
+				} else {
+					access = resp.Access
+					Goose.New.Logf(3,"Default access type %s: %d", static, resp.Access)
+				}
+
+
             if _, ok := resp.Swagger.Paths[path]; !ok {
                resp.Swagger.Paths[path] = SwaggerPathT{}
    //         } else if _, ok := resp.Swagger.Paths[path][httpmethod]; !ok {
@@ -471,7 +493,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
             }
 
             num = method.Type.NumIn()
-            if resp.Access == AccessAuthInfo || resp.Access == AccessVerifyAuthInfo || resp.Access == AccessInfo {
+            if access == AccessAuthInfo || access == AccessVerifyAuthInfo || access == AccessInfo {
                if (parmcount+1) != num {
                   parmcount++
                   if (parmcount != (num-3)) || (num<2) || (method.Type.In(num-2).Kind()!=reflect.String) || (method.Type.In(num-1).Kind()!=reflect.String) {
@@ -599,7 +621,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   Body:      postFields,
                   ParmNames: parmnames,
                   Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
-   //               Access:    resp.Access,
+						access:		 access,
                })
 
                if prt[0:2] == "ws" { // if this is a web service handler
