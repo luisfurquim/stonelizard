@@ -166,6 +166,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                            resp.Access = AccessVerifyAuthInfo
                         case "info":
                            resp.Access = AccessInfo
+                          default:
+                           resp.Access = AccessNone
                      }
                      Goose.New.Logf(3,"Custom access type: %d", resp.Access)
                   } else {
@@ -620,7 +622,7 @@ func New(svcs ...EndPointHandler) (*Service, error) {
                   Query:     query,
                   Body:      postFields,
                   ParmNames: parmnames,
-                  Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,resp.Access,proto[0][0] == 'w'),
+                  Handle:    buildHandle(reflect.ValueOf(svc),callByRef,method,pt,access,proto[0][0] == 'w'),
 						access:		 access,
                })
 
@@ -709,6 +711,8 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 							access = AccessVerifyAuthInfo
 						case "info":
 							access = AccessInfo
+						default:
+							access = AccessNone
 					}
 					Goose.New.Logf(3,"Custom access type for static %s: %d", static, access)
 				} else {
