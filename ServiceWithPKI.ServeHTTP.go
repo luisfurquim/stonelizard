@@ -20,13 +20,13 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    r.Header.Del("X-Request-Signer-Type")
 
    if r.URL.Path != (svc.SwaggerPath+"/swagger.json") && r.Method != "OPTIONS" {
-      Goose.InitServe.Logf(0,"wrapped")
+      Goose.InitServe.Logf(2,"wrapped")
 
       signature, err = base64.StdEncoding.DecodeString(r.Header.Get("X-Request-Signature"))
       if err == nil {
          upk, usertype, err = svc.PK.FindCertificate(r.Header.Get("X-Request-Signer"))
          if err == nil {
-				Goose.InitServe.Logf(0,"Certificate found: %#v", upk)
+				Goose.InitServe.Logf(4,"Certificate found: %#v", upk)
             msgToVerify = strings.ToUpper(r.Method) + "+" + r.URL.String()
 
             buf, err = io.ReadAll(r.Body)
@@ -37,16 +37,16 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
             r.Body = NewReadCloser(buf)
 
             if upk.Verify(msgToVerify, signature) == nil {
-               Goose.InitServe.Logf(0,"Verified")
+               Goose.InitServe.Logf(2,"Verified")
                r.Header.Set("X-Request-Signer-Certificate", base64.StdEncoding.EncodeToString(upk.Certificate()))
                r.Header.Set("X-Request-Signer-Type", usertype)
             }
 			} else {
-				Goose.InitServe.Logf(0,"Certificate not found: %s", r.Header.Get("X-Request-Signer"))
-				Goose.InitServe.Logf(0,"Certificates: %#v", svc.PK)
+				Goose.InitServe.Logf(1,"Certificate not found: %s", r.Header.Get("X-Request-Signer"))
+				Goose.InitServe.Logf(1,"Certificates: %#v", svc.PK)
          }
       } else {
-			Goose.InitServe.Logf(0,"Signature not found: %s", r.Header.Get("X-Request-Signature"))
+			Goose.InitServe.Logf(1,"Signature not found: %s", r.Header.Get("X-Request-Signature"))
 		}
    }
    svc.Service.ServeHTTP(w,r)

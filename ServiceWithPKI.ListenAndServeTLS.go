@@ -112,18 +112,22 @@ FindEncLoop:
             if path[len(path)-1] != '/' {
                path += "/"
             }
+
+            if exportedAbs[len(exportedAbs)-1] != '/' {
+               exportedAbs += "/"
+            }
+
             Goose.InitServe.Logf(2,"Adding http file server handler on %s: %s (%s)", path, exported, exportedAbs)
             mux.Handle(path,FileServerHandlerT{
-               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported.exported))),
 //               hnd:http.FileServer(http.Dir(exported)),
+//               hnd:http.StripPrefix(path, http.FileServer(http.Dir(exported.exported))),
+					hnd:http.FileServer(SLFileSystem{Dir: http.Dir(exportedAbs)}),
                svc:&svc.Service,
                path:path,
                exported: exported.exported,
                access: exported.access,
             })
          }
-
-
 
          // Configure the server
          srv := &http.Server{

@@ -496,12 +496,18 @@ func New(svcs ...EndPointHandler) (*Service, error) {
 
             num = method.Type.NumIn()
             if access == AccessAuthInfo || access == AccessVerifyAuthInfo || access == AccessInfo {
-               if (parmcount+1) != num {
-                  parmcount++
-                  if (parmcount != (num-3)) || (num<2) || (method.Type.In(num-2).Kind()!=reflect.String) || (method.Type.In(num-1).Kind()!=reflect.String) {
-                     return nil, errors.New(fmt.Sprintf("Wrong parameter (with info) count at method %s, got %d want %d",methodName,parmcount,num))
-                  }
-               }
+					if method.Type.In(num-1) == typeEnv {
+						if (parmcount+2) != num {
+							return nil, errors.New(fmt.Sprintf("Wrong parameter (with info) count at method %s, got %d want %d",methodName,parmcount,num))
+						}
+					} else {
+						if (parmcount+1) != num {
+							parmcount++
+							if (parmcount != (num-3)) || (num<2) || (method.Type.In(num-2).Kind()!=reflect.String) || (method.Type.In(num-1).Kind()!=reflect.String) {
+								return nil, errors.New(fmt.Sprintf("Wrong parameter (with info) count at method %s, got %d want %d",methodName,parmcount,num))
+							}
+						}
+					}
             } else {
                if (parmcount+1) != num {
                   return nil, errors.New(fmt.Sprintf("Wrong parameter count at method %s, got %d want %d",methodName,parmcount,num))

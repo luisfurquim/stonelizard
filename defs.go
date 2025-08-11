@@ -106,6 +106,12 @@ type WSEventTrigger struct {
    Status bool
 }
 
+type Env struct{
+	Authinfo *x509.Certificate
+	Host string
+	RemoteAddr string
+}
+
 type UrlNode struct {
    Path               string       // The URL path with input parameters
    produces           string       // The possible mime-types produced by the operation for output
@@ -348,5 +354,6 @@ var Goose StonelizardG
 var WebSocketResponse Response
 var dummyWSEventTrigger *WSEventTrigger
 var typeWSEventTrigger reflect.Type = reflect.TypeOf(dummyWSEventTrigger)
+var typeEnv reflect.Type = reflect.TypeOf(Env{})
 var isBase64DataURL *regexp.Regexp = regexp.MustCompile(`^data:[a-zA-Z0-9]+/[a-zA-Z0-9]+;base64,(.*)$`)
 

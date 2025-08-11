@@ -7,6 +7,7 @@ import (
    "strings"
    "reflect"
    "net/http"
+   "crypto/x509"
    "encoding/base64"
 )
 
@@ -30,6 +31,7 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       var sIns string
       var enc []string
       var decoded []byte
+      var env Env
 
       defer func() {
          // Tries to survive to any panic from the application.
@@ -175,49 +177,70 @@ func buildHandle(this reflect.Value, isPtr bool, met reflect.Method, posttype []
       }
 
       num = met.Type.NumIn()
+      env.Host = host
+      env.RemoteAddr = remoteAddr
 
       // If the application required, we must provide the authenticated user information to the method.
       // This is done by adding it as the last parameter
-      Goose.OpHandle.Logf(8,"ins3: %d:%s",len(ins),ins)
+      Goose.OpHandle.Logf(8,"ins3: %d:%s, num:%d", len(ins), ins, num)
 //Goose.OpHandle.Logf(0,"ins3: %d:%s",len(ins),ins)
       if accesstype == AccessAuthInfo || accesstype == AccessVerifyAuthInfo || accesstype == AccessInfo {
-         Goose.OpHandle.Logf(4,"Checking the need for appending authinfo")
-         if (len(ins)+1) == num || (len(ins)+3) == num {
-            if reflect.ValueOf(authinfo).IsValid() {
-//               Goose.OpHandle.Logf(0,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())//7
-               ins = append(ins,reflect.ValueOf(authinfo))
-            }
-         }
+			if met.Type.In(num-1) == typeEnv {
+				if reflect.ValueOf(authinfo).IsValid() {
+					env.Authinfo = authinfo.(*x509.Certificate)
+				}
+			} else {
+				Goose.OpHandle.Logf(4,"Checking the need for appending authinfo")
+				if (len(ins)+1) == num || (len(ins)+3) == num {
+					if reflect.ValueOf(authinfo).IsValid() {
+						Goose.OpHandle.Logf(4,"Appending authinfo: %s",reflect.ValueOf(authinfo).Elem())//7
+						ins = append(ins,reflect.ValueOf(authinfo))
+					}
+				}
+			}
       }
 
-      // Checks if the calling parameter count matches the method parameter count
-      if len(ins) != num {
-         var sdbg string
+		if met.Type.In(num-1) == typeEnv {
+			// Method uses Env struct to receive environment parameters
+			ins = append(ins,reflect.ValueOf(env))
+			if len(ins) != num {
+				errmsg = fmt.Sprintf("Operation call with wrong input argument count: expected:%d, received:%d -> %#v", num, len(ins), ins)
+				Goose.OpHandle.Logf(1,errmsg)
+				return Response {
+					Status:            http.StatusBadRequest,
+					Body:              errmsg,
+				}
+			}
+		} else {
+			// Checks if the calling parameter count matches the method parameter count
+			if len(ins) != num {
+				var sdbg string
 
-         if (len(ins) == (num-2)) && (num>=2) && (met.Type.In(num-2).Kind()==reflect.String) && (met.Type.In(num-1).Kind()==reflect.String) {
-            Goose.OpHandle.Logf(5, "Appending request info: host:%s, RemoteAddr: %s", host, remoteAddr)
-            ins = append(ins,reflect.ValueOf(host),reflect.ValueOf(remoteAddr))
+				if (len(ins) == (num-2)) && (num>=2) && (met.Type.In(num-2).Kind()==reflect.String) && (met.Type.In(num-1).Kind()==reflect.String) {
+					Goose.OpHandle.Logf(5, "Appending request info: host:%s, RemoteAddr: %s", host, remoteAddr)
+					ins = append(ins,reflect.ValueOf(host),reflect.ValueOf(remoteAddr))
 
-            for _, rval = range ins[1:] {
-               sIns += fmt.Sprintf("%#v, ",rval.Interface())
-            }
-            if len(sIns) > 0 {
-               sIns = sIns[:len(sIns)-2]
-            }
-            Goose.OpHandle.Logf(8,"Operation has these parameters: this, %s",sIns)
-         } else {
-            for ii, in := range ins[1:] {
-               sdbg += fmt.Sprintf("[%s], ",in.Interface())
-               Goose.OpHandle.Logf(1,"%d: [%#v], ", ii, in.Interface())
-            }
-            errmsg = fmt.Sprintf("Operation call with wrong input argument count: expected:%d, received:%d -> %s", num, len(ins), sdbg)
-            Goose.OpHandle.Logf(1,errmsg)
-            return Response {
-               Status:            http.StatusBadRequest,
-               Body:              errmsg,
-            }
-         }
-      }
+					for _, rval = range ins[1:] {
+						sIns += fmt.Sprintf("%#v, ",rval.Interface())
+					}
+					if len(sIns) > 0 {
+						sIns = sIns[:len(sIns)-2]
+					}
+					Goose.OpHandle.Logf(8,"Operation has these parameters: this, %s",sIns)
+				} else {
+					for ii, in := range ins[1:] {
+						sdbg += fmt.Sprintf("[%s], ",in.Interface())
+						Goose.OpHandle.Logf(1,"%d: [%#v], ", ii, in.Interface())
+					}
+					errmsg = fmt.Sprintf("Operation call with wrong input argument count: expected:%d, received:%d -> %s", num, len(ins), sdbg)
+					Goose.OpHandle.Logf(1,errmsg)
+					return Response {
+						Status:            http.StatusBadRequest,
+						Body:              errmsg,
+					}
+				}
+			}
+		}
 
       // Finally calls the method
       retData := met.Func.Call(ins)
