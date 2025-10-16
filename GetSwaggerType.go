@@ -118,6 +118,7 @@ func GetSwaggerType(parm reflect.Type) (*SwaggerParameterT, error) {
    // define the key types and a key/value collection format (cskv - comma separated key/value),
    // then we recurse getting the type definition of its elements
    if parm.Kind()==reflect.Map {
+		Goose.Swagger.Logf(2,"map elem type item=%#v, err:%s", item, err)
       item, err = GetSwaggerType(parm.Elem())
       Goose.Swagger.Logf(6,"map elem type item=%#v, err:%s", item, err)
       if (item==nil) || (err!=nil) || (item.Schema==nil) {
