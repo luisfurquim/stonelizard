@@ -289,6 +289,17 @@ func fieldHandle(fldName string, field reflect.StructField) (*SwaggerSchemaT, []
    var subItem       *SwaggerParameterT
    var fieldType      string
 
+   doc   = field.Tag.Get("stonelizard")
+   if doc == "ignore" {
+		return &SwaggerSchemaT{
+			Title:            "",
+			Type:             doc,
+			Description:      &doc,
+			Required:         nil,
+			Properties:       nil,
+		}, []string{}, nil
+	}
+
    Goose.Swagger.Logf(2,"Struct field: %s",fldName)
    doc   = field.Tag.Get("doc")
    if doc != "" {
