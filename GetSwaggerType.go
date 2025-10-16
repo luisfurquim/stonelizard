@@ -289,7 +289,7 @@ func fieldHandle(fldName string, field reflect.StructField) (*SwaggerSchemaT, []
    var subItem       *SwaggerParameterT
    var fieldType      string
 
-   Goose.Swagger.Logf(6,"Struct field: %s",fldName)
+   Goose.Swagger.Logf(2,"Struct field: %s",fldName)
    doc   = field.Tag.Get("doc")
    if doc != "" {
       description    = new(string)

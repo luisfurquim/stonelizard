@@ -41,6 +41,7 @@ func getResponses(fld reflect.StructField, typ reflect.Type) (map[string]Swagger
             fldType = fldType.Elem()
          }
 
+			Goose.New.Logf(3,"---------------> get response type: %#v",fld.Name)
          SwaggerParameter, err = GetSwaggerType(fldType)
          if err != nil {
             return nil, nil, err
