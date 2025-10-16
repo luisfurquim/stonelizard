@@ -9,6 +9,6 @@ require (
 	github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	go.etcd.io/etcd/client/v2 v2.305.7
-	golang.org/x/net v0.24.0
-	golang.org/x/oauth2 v0.5.0
+	golang.org/x/net v0.38.0
+	golang.org/x/oauth2 v0.27.0
 )
