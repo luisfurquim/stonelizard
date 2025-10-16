@@ -102,7 +102,7 @@ type WSocketOperation struct {
 }
 
 type WSEventTrigger struct {
-   EventData chan interface{}
+   EventData chan interface{}  `stonelizard:"ignore"`
    Status bool
 }
 
