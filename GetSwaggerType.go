@@ -331,6 +331,8 @@ func fieldHandle(fldName string, field reflect.StructField) (*SwaggerSchemaT, []
 
 func mapName(p reflect.Type) string {
    var n string
+   
+   Goose.Swagger.Logf(4,"Checking type of %s", p.Name())
 
    n = p.Elem().Name()
    if n != "" {
