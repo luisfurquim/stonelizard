@@ -333,6 +333,7 @@ func mapName(p reflect.Type) string {
    var n string
    
    Goose.Swagger.Logf(4,"Checking type of %s", p.Name())
+   Goose.Swagger.Logf(4,"Checking type of %s -> %s", p.String(), p.PkgPath())
 
    n = p.Elem().Name()
    if n != "" {
