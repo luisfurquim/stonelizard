@@ -176,7 +176,7 @@ ExpectTrigger:
 							lbuf = lbuf[:120]
 						}
 
-                  Goose.Serve.Logf(4,"Event trigger channel was closed when sending output on event %s: %#v", name, lbuf)
+                  Goose.Serve.Logf(4,"Event trigger channel error (%s) when sending output on event %s: %#v", err, name, lbuf)
 //                  c.Close()
 //                  return
                }
