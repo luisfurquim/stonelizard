@@ -1,24 +1,27 @@
 package stonelizard
 
 import (
-	"fmt"
+	"strconv"
 )
 
 func (ba ByteArray) MarshalJSON() ([]byte, error) {
-	var s string
-	var b []byte
-	s = fmt.Sprintf("%#v",ba)
-	b = []byte(s)
-	b[len(b)-1] = ']'
-	b[21] = '['
+	var s string = "["
+	var c byte
 
+	if len(ba)>0 {
+		s += strconv.Itoa(int(ba[0]))
+	}
 
-	if len(b) < 120 {
-		Goose.Serve.Logf(4,"ByteArray json: %s", b[21:])
+	for _, c = range ba[1:] {
+		s += "," + strconv.Itoa(int(c))
+	}
+
+	if len(s) < 120 {
+		Goose.Serve.Logf(4,"ByteArray json: %s", s[21:])
 	} else {
-		Goose.Serve.Logf(4,"ByteArray json~: %s", b[21:120])
+		Goose.Serve.Logf(4,"ByteArray json~: %s", s[21:120])
 	}
 	
-	return b[21:], nil
+	return []byte(s+"]"), nil
 }
 
