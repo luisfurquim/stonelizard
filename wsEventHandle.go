@@ -141,7 +141,7 @@ ExpectTrigger:
                   }
                   Goose.Serve.Logf(4,"Got vtype: %#v",vtype)
                   if t != vtype {
-							if !(t.Kind()==reflect.Array && t.Elem().Kind()==reflect.Interface && vtype.Kind()==reflect.Array) {
+							if !(t.Kind()==reflect.Slice && t.Elem().Kind()==reflect.Interface && vtype.Kind()==reflect.Slice) {
 								Goose.Serve.Logf(4,"types differ (@%d), expected %s (Kind=%s) caught %s (Kind=%s)", i, t, t.Kind(), vtype, vtype.Kind())
 								if (t.Kind() != reflect.Array && t.Kind() != reflect.Slice) ||
 									(vtype.Kind() != reflect.Array && vtype.Kind() != reflect.Slice) ||
