@@ -117,8 +117,13 @@ ExpectTrigger:
                   return
                }
 
+					lbuf = fmt.Sprintf("%#v", v)
+					if len(lbuf) > 120 {
+						lbuf = lbuf[:120]
+					}
+
                // Check for compliance: the websocket application MUST send data as defined (length and type) in the StrucTag
-               Goose.Serve.Logf(4,"Debug %T - %#v, %T - %#v", v, v, types, types)
+               Goose.Serve.Logf(4,"Debug %T - %#v, %T - %#v", v, lbuf, types, types)
                if len(v.Interface().([]interface{})) != len(types) {
                   Goose.Serve.Logf(1,"Error %s: len(param) == %d, len(types)==%d",WrongParameterLength, len(v.Interface().([]interface{})), len(types))
                   continue

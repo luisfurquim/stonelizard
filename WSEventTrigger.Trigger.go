@@ -11,6 +11,7 @@ import (
 // The data parameters MUST be compliant (length and types) to what you defined
 // in the StructTag for your particular event.
 func (wset *WSEventTrigger) Trigger(data ...interface{}) (err error) {
+	var lbuf string
 
    err = nil
 
@@ -32,7 +33,12 @@ func (wset *WSEventTrigger) Trigger(data ...interface{}) (err error) {
    }
 
    // Send data to wsEventHandle.1 which has access to the HTTP/Websocket connection
-   Goose.Serve.Logf(4,"Send will send %#v",data)
+	lbuf = fmt.Sprintf("%#v", data)
+	if len(lbuf) > 120 {
+		lbuf = lbuf[:120]
+	}
+
+   Goose.Serve.Logf(4,"Send will send %s",data)
    wset.EventData <- data
    Goose.Serve.Logf(5,"Send has sent data")
 
