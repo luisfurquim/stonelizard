@@ -10,7 +10,7 @@ func (ba ByteArray) MarshalJSON() ([]byte, error) {
 	s = fmt.Sprintf("%#v",ba)
 	b = []byte(s)
 	b[len(b)-1] = ']'
-	b[6] = '['
+	b[21] = '['
 
 
 	if len(b) < 120 {
