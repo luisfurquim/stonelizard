@@ -287,6 +287,8 @@ type FileServerHandlerT struct {
 
 type PublicAccessT struct {}
 
+type ByteArray []byte
+
 const (
    AccessNone uint8 = iota
    AccessAuth

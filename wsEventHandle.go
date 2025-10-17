@@ -18,6 +18,9 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    var parmtypes []reflect.Type
    var object struct{}
    var evHandle *WSEventTrigger
+   var bytearray reflect.Type
+
+   bytearray = reflect.TypeOf(ByteArray{})
 
    // De-reference the object, if needed
    v = reflect.ValueOf(obj)
@@ -136,6 +139,12 @@ ExpectTrigger:
                         }
                      }
                   }
+
+						if vtype.Kind() == reflect.Slice && vtype.Elem().Kind() == reflect.Uint8 {
+							vv := v.Elem().Index(i).Elem()
+							v.Elem().Index(i).Set(vv.Convert(bytearray))
+						}
+                  
                }
 
                Goose.Serve.Logf(4,"Event comm Recv: %#v",v.Interface())
