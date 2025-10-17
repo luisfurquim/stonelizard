@@ -38,7 +38,7 @@ func (wset *WSEventTrigger) Trigger(data ...interface{}) (err error) {
 		lbuf = lbuf[:120]
 	}
 
-   Goose.Serve.Logf(4,"Send will send %s",data)
+   Goose.Serve.Logf(4,"Send will send %s",lbuf)
    wset.EventData <- data
    Goose.Serve.Logf(5,"Send has sent data")
 

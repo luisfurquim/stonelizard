@@ -141,16 +141,18 @@ ExpectTrigger:
                   }
                   Goose.Serve.Logf(4,"Got vtype: %#v",vtype)
                   if t != vtype {
-                     Goose.Serve.Logf(4,"types differ (@%d), expected %s (Kind=%s) caught %s (Kind=%s)", i, t, t.Kind(), vtype, vtype.Kind())
-                     if (t.Kind() != reflect.Array && t.Kind() != reflect.Slice) ||
-                        (vtype.Kind() != reflect.Array && vtype.Kind() != reflect.Slice) ||
-                         !vtype.Elem().Implements(t.Elem()) {
-                        if !(t.Kind() == reflect.Struct && vtype.Kind() == reflect.Struct) &&
-                           !(t.Kind() == reflect.Map && vtype.Kind() == reflect.Map) {
-                           Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
-                           continue ExpectTrigger
-                        }
-                     }
+							if !(t.Kind()==reflect.Array && t.Elem().Kind()==reflect.Interface && vtype.Kind()==reflect.Array) {
+								Goose.Serve.Logf(4,"types differ (@%d), expected %s (Kind=%s) caught %s (Kind=%s)", i, t, t.Kind(), vtype, vtype.Kind())
+								if (t.Kind() != reflect.Array && t.Kind() != reflect.Slice) ||
+									(vtype.Kind() != reflect.Array && vtype.Kind() != reflect.Slice) ||
+									 !vtype.Elem().Implements(t.Elem()) {
+									if !(t.Kind() == reflect.Struct && vtype.Kind() == reflect.Struct) &&
+										!(t.Kind() == reflect.Map && vtype.Kind() == reflect.Map) {
+										Goose.Serve.Logf(1,"Error %s (@%d), expected %s caught %s, ignoring this trigger",WrongParameterType,i,t,v.Elem().Index(i).Elem().Type())
+										continue ExpectTrigger
+									}
+								}
+							}
                   }
 
 						if vtype.Kind() == reflect.Slice && vtype.Elem().Kind() == reflect.Uint8 {
@@ -169,7 +171,12 @@ ExpectTrigger:
                // event name , event data
                err = codec.Send(ws, []interface{}{0, name, v.Interface()})
                if err != nil {
-                  Goose.Serve.Logf(4,"Event trigger channel was closed when sending output on event %s: %#v", name, v.Interface())
+						lbuf = fmt.Sprintf("%#v", v.Interface())
+						if len(lbuf) > 120 {
+							lbuf = lbuf[:120]
+						}
+
+                  Goose.Serve.Logf(4,"Event trigger channel was closed when sending output on event %s: %#v", name, lbuf)
 //                  c.Close()
 //                  return
                }
