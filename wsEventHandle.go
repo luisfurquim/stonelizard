@@ -19,6 +19,7 @@ func wsEventHandle(ws *websocket.Conn, codec websocket.Codec, obj interface{}, w
    var object struct{}
    var evHandle *WSEventTrigger
    var bytearray reflect.Type
+   var lbuf string
 
    bytearray = reflect.TypeOf(ByteArray{})
 
@@ -102,7 +103,13 @@ ExpectTrigger:
                // Wait for data sent by the websocket application layer (the event triggering)
                Goose.Serve.Logf(3,"Event comm loop will wait on channel for %s", name)
                v, ok = c.Recv()
-               Goose.Serve.Logf(4,"Event comm loop test %#v received %#v",ok, v.Interface())
+
+					lbuf = fmt.Sprintf("%#v", v.Interface())
+					if len(lbuf) > 120 {
+						lbuf = lbuf[:120]
+					}
+
+               Goose.Serve.Logf(4,"Event comm loop test %#v received %#v",ok, lbuf)
                if !ok {
                   Goose.Serve.Logf(1,"End event triggering: wsStopEvent has closed the channel")
                   // End event triggering if wsStopEvent has closed the channel
@@ -147,7 +154,12 @@ ExpectTrigger:
                   
                }
 
-               Goose.Serve.Logf(4,"Event comm Recv: %#v",v.Interface())
+					lbuf = fmt.Sprintf("%#v", v.Interface())
+					if len(lbuf) > 120 {
+						lbuf = lbuf[:120]
+					}
+
+               Goose.Serve.Logf(4,"Event comm Recv: %s",lbuf)
                // event name , event data
                err = codec.Send(ws, []interface{}{0, name, v.Interface()})
                if err != nil {
