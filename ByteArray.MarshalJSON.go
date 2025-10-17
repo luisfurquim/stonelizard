@@ -14,11 +14,11 @@ func (ba ByteArray) MarshalJSON() ([]byte, error) {
 
 
 	if len(b) < 120 {
-		Goose.Serve.Logf(4,"ByteArray json: %s", b[6:])
+		Goose.Serve.Logf(4,"ByteArray json: %s", b[21:])
 	} else {
-		Goose.Serve.Logf(4,"ByteArray json~: %s", b[6:120])
+		Goose.Serve.Logf(4,"ByteArray json~: %s", b[21:120])
 	}
 	
-	return b[6:], nil
+	return b[21:], nil
 }
 
