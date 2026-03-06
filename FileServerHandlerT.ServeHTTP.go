@@ -134,7 +134,7 @@ func (fs FileServerHandlerT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	Goose.Serve.Logf(4,"Calling handler for %#v", r.URL)
 	r.URL.Path = r.URL.Path[len(fs.path):]
+	Goose.Serve.Logf(4,"Calling handler for %#v on %#v", r.URL, fs)
    fs.hnd.ServeHTTP(w,r)
 }
