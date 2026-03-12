@@ -12,8 +12,6 @@ github.com/luisfurquim/etcdconfig v0.0.0-20230317185517-e9bac889c1ee h1:qY9OF2db
 github.com/luisfurquim/etcdconfig v0.0.0-20230317185517-e9bac889c1ee/go.mod h1:I7K94kYP0DHoZr0ZQ3PX51TyI72b9y68FLU8W2MzK84=
 github.com/luisfurquim/goose v0.0.0-20230612043435-ee4fb49198b6 h1:OCTWcXEZ/M9ucrySiNjFbvj3ldb/ZSJMcdHKgmgVn2Y=
 github.com/luisfurquim/goose v0.0.0-20230612043435-ee4fb49198b6/go.mod h1:7ImG4cPD2O9s8tvUpm/M+079kHPcI9uL6F3w/rzqevY=
-github.com/luisfurquim/stonelizard/certkit v0.0.0-20240426184324-6efac48fc8fb h1:QF8Ms7hFu/oPnN+Y1KJQfwP/QBlN9uFpIfBPMjcE7eg=
-github.com/luisfurquim/stonelizard/certkit v0.0.0-20240426184324-6efac48fc8fb/go.mod h1:Oom6sjCfbOfMl27dpJm9N/uZu9ZHBv1rAHEHgzt6Rq8=
 github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003 h1:iMMxtYQtEcLqcaFdVc3XH+HPJp9AoV3zaFjgj6av+DA=
 github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003/go.mod h1:UbnN9zjcQHbInXkTluG0844FbK4FVYrYtncLosMShuQ=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=

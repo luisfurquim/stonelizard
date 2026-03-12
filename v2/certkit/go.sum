@@ -1,2 +1,8 @@
 github.com/luisfurquim/goose v0.0.0-20230612043435-ee4fb49198b6 h1:OCTWcXEZ/M9ucrySiNjFbvj3ldb/ZSJMcdHKgmgVn2Y=
 github.com/luisfurquim/goose v0.0.0-20230612043435-ee4fb49198b6/go.mod h1:7ImG4cPD2O9s8tvUpm/M+079kHPcI9uL6F3w/rzqevY=
+github.com/luisfurquim/stonelizard/v2 v2.0.0 h1:z2tVDw6gERxIwRWal9URpLyyqnMgpPz4/Do5593OhDc=
+github.com/luisfurquim/stonelizard/v2 v2.0.0/go.mod h1:iP0Ix7JWPj299TEHYrBiUtJ1IRuGPmwqNPJCeewjjwA=
+github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003 h1:iMMxtYQtEcLqcaFdVc3XH+HPJp9AoV3zaFjgj6av+DA=
+github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003/go.mod h1:UbnN9zjcQHbInXkTluG0844FbK4FVYrYtncLosMShuQ=
+golang.org/x/net v0.38.0 h1:vRMAPTMaeGqVhG5QyLJHqNDwecKTomGeqbnfZyKlBI8=
+golang.org/x/net v0.38.0/go.mod h1:ivrbrMbzFq5J41QOQh0siUuly180yBYtLp+CKbEaFx8=
