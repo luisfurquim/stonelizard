@@ -11,7 +11,7 @@ import (
    "crypto/tls"
    "crypto/x509"
    "encoding/pem"
-   "github.com/luisfurquim/stonelizard/v1"
+   "github.com/luisfurquim/stonelizard/v2"
 )
 
 func (ck *CertKit) Authorize(path string, parms map[string]interface{}, RemoteAddr string, TLS *tls.ConnectionState, SavePending func(interface{}) error) (httpstat int, data interface{}, err error) {

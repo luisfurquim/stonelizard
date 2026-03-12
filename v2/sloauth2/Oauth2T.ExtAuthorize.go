@@ -13,9 +13,9 @@ import (
    "encoding/json"
    "crypto/x509/pkix"
    "golang.org/x/oauth2"
-   "github.com/luisfurquim/stonelizard/v1"
-   "github.com/luisfurquim/stonelizard/v1/certkit"
-   "github.com/luisfurquim/stonelizard/v1/certkitetcd"
+   "github.com/luisfurquim/stonelizard/v2"
+   "github.com/luisfurquim/stonelizard/v2/certkit"
+   "github.com/luisfurquim/stonelizard/v2/certkitetcd"
 )
 
 func (oa *Oauth2T) ExtAuthorize(ch chan stonelizard.ExtAuthorizeIn, path string, parms map[string]interface{}, resp http.ResponseWriter, req *http.Request, SavePending func(interface{}) error) (int, interface{}, error) {

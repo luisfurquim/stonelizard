@@ -1,9 +1,9 @@
-package oauth2mixed
+package sloauth2
 
 import (
    "crypto/tls"
-   "github.com/luisfurquim/stonelizard/v1/certkit"
-   "github.com/luisfurquim/stonelizard/v1/certkitetcd"
+   "github.com/luisfurquim/stonelizard/v2/certkit"
+   "github.com/luisfurquim/stonelizard/v2/certkitetcd"
 )
 
 func (ck *Oauth2T) GetTLSConfig(Access uint8) (*tls.Config, error) {

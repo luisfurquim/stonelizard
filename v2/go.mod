@@ -1,4 +1,4 @@
-module github.com/luisfurquim/stonelizard/v1
+module github.com/luisfurquim/stonelizard/v2
 
 go 1.23.0
 
@@ -7,7 +7,7 @@ toolchain go1.23.1
 require (
 	github.com/luisfurquim/etcdconfig v0.0.0-20230317185517-e9bac889c1ee
 	github.com/luisfurquim/goose v0.0.0-20230612043435-ee4fb49198b6
-	github.com/luisfurquim/stonelizard/v1/certkit v0.0.0
+	github.com/luisfurquim/stonelizard/v2/certkit v0.0.0
 	github.com/luisfurquim/strtree v0.0.0-20231021183106-0608a93df003
 	go.etcd.io/etcd/client/v2 v2.305.7
 	golang.org/x/net v0.38.0
@@ -24,4 +24,4 @@ require (
 	go.etcd.io/etcd/client/pkg/v3 v3.5.7 // indirect
 )
 
-replace github.com/luisfurquim/stonelizard/v1/certkit => ./certkit
+replace github.com/luisfurquim/stonelizard/v2/certkit => ./certkit

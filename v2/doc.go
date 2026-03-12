@@ -27,7 +27,7 @@ import (
    "flag"
    "context"
    "net/http"
-   "github.com/luisfurquim/stonelizard/v1"
+   "github.com/luisfurquim/stonelizard/v2"
    "github.com/luisfurquim/goose"
 )
 

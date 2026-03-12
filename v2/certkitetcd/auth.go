@@ -14,7 +14,7 @@ import (
    "crypto/sha1"
    "encoding/pem"
    "golang.org/x/net/context"
-   "github.com/luisfurquim/stonelizard/v1"
+   "github.com/luisfurquim/stonelizard/v2"
    "github.com/luisfurquim/etcdconfig"
 //   etcd "github.com/coreos/etcd/client"
 //   etcd "github.com/etcd-io/etcd/client/v2"

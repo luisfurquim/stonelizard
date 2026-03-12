@@ -6,7 +6,7 @@ import (
    "crypto/x509"
    "golang.org/x/oauth2"
    "github.com/luisfurquim/goose"
-   "github.com/luisfurquim/stonelizard/v1"
+   "github.com/luisfurquim/stonelizard/v2"
 )
 
 
