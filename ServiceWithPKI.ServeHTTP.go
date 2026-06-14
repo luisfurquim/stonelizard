@@ -22,9 +22,27 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
    if r.URL.Path != (svc.SwaggerPath+"/swagger.json") && r.Method != "OPTIONS" {
       Goose.InitServe.Logf(2,"wrapped")
 
-      signature, err = base64.StdEncoding.DecodeString(r.Header.Get("X-Request-Signature"))
+      // A assinatura normalmente chega em headers. No handshake de WebSocket o
+      // browser NÃO permite headers custom, então o cliente (paperfish) a envia
+      // como query param. Fallback: se o header está vazio, lê da query e
+      // REMOVE esses params da URL — assim o msgToVerify volta a ser a URL
+      // canônica que o cliente assinou. Verificação daqui pra baixo é idêntica.
+      sigHdr := r.Header.Get("X-Request-Signature")
+      signerHdr := r.Header.Get("X-Request-Signer")
+      if sigHdr == "" {
+         q := r.URL.Query()
+         if qsig := q.Get("X-Request-Signature"); qsig != "" {
+            sigHdr = qsig
+            signerHdr = q.Get("X-Request-Signer")
+            q.Del("X-Request-Signature")
+            q.Del("X-Request-Signer")
+            r.URL.RawQuery = q.Encode()
+         }
+      }
+
+      signature, err = base64.StdEncoding.DecodeString(sigHdr)
       if err == nil {
-         upk, usertype, err = svc.PK.FindCertificate(r.Header.Get("X-Request-Signer"))
+         upk, usertype, err = svc.PK.FindCertificate(signerHdr)
          if err == nil {
 				Goose.InitServe.Logf(4,"Certificate found: %#v", upk)
             msgToVerify = strings.ToUpper(r.Method) + "+" + r.URL.String()
@@ -42,7 +60,7 @@ func (svc *ServiceWithPKI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
                r.Header.Set("X-Request-Signer-Type", usertype)
             }
 			} else {
-				Goose.InitServe.Logf(1,"Certificate not found: %s", r.Header.Get("X-Request-Signer"))
+				Goose.InitServe.Logf(1,"Certificate not found: %s", signerHdr)
 				Goose.InitServe.Logf(1,"Certificates: %#v", svc.PK)
          }
       } else {
